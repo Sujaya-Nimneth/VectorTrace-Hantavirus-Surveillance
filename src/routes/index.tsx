@@ -1,29 +1,69 @@
 import { createFileRoute } from "@tanstack/react-router";
+import { useMemo } from "react";
 import { MetricCard } from "@/components/MetricCard";
 import { EpidemicCurve } from "@/components/EpidemicCurve";
 import { AlertsFeed } from "@/components/AlertsFeed";
 import { RiskTable } from "@/components/RiskTable";
 import { Activity, Rat, ShieldAlert, FlaskConical } from "lucide-react";
+import { useCases, useRodents } from "@/hooks/use-surveillance";
 
 export const Route = createFileRoute("/")({ component: Dashboard });
 
+function bucketByDay(cases: { date: string }[], days: number) {
+  const out = new Array(days).fill(0);
+  const now = Date.now();
+  for (const c of cases) {
+    const d = Math.floor((now - +new Date(c.date)) / 86400000);
+    if (d >= 0 && d < days) out[days - 1 - d]++;
+  }
+  return out;
+}
+
 function Dashboard() {
+  const { data: cases } = useCases();
+  const rodents = useRodents();
+
+  const metrics = useMemo(() => {
+    const now = Date.now();
+    const last30 = cases.filter(c => (now - +new Date(c.date)) / 86400000 <= 30);
+    const prior30 = cases.filter(c => {
+      const d = (now - +new Date(c.date)) / 86400000;
+      return d > 30 && d <= 60;
+    });
+    const active = last30.filter(c => c.status !== "Confirmed").length + last30.filter(c => c.status === "Confirmed").length;
+    const yearStart = new Date(new Date().getFullYear(), 0, 1).getTime();
+    const ytdConfirmed = cases.filter(c => c.status === "Confirmed" && +new Date(c.date) >= yearStart).length;
+    const pending = cases.filter(c => c.status === "Pending").length;
+    const delta = (a: number, b: number) => b === 0 ? 0 : Math.round(((a - b) / b) * 100);
+
+    return {
+      active: { value: active, delta: delta(last30.length, prior30.length), spark: bucketByDay(cases, 14) },
+      rodents: { value: rodents.length, spark: bucketByDay(rodents, 14) },
+      ytd: { value: ytdConfirmed, spark: bucketByDay(cases.filter(c => c.status === "Confirmed"), 14) },
+      pending: { value: pending, spark: bucketByDay(cases.filter(c => c.status === "Pending"), 14) },
+    };
+  }, [cases, rodents]);
+
+  const fmt = (n: number) => n.toLocaleString();
+
   return (
     <div className="p-6 space-y-5 max-w-[1600px] mx-auto">
       <div>
         <h1 className="text-xl font-bold tracking-tight">Command Center</h1>
-        <p className="text-[12.5px] text-muted-foreground mt-0.5">Real-time hantavirus surveillance · last refreshed 14s ago</p>
+        <p className="text-[12.5px] text-muted-foreground mt-0.5">
+          Real-time hantavirus surveillance · {cases.length} cases tracked across {rodents.length} sites
+        </p>
       </div>
 
       <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4">
-        <MetricCard label="Active Human Cases" value="247" delta={12} tone="alert" icon={ShieldAlert}
-          spark={[20, 22, 19, 24, 28, 26, 31, 35, 33, 38, 42, 47]} />
-        <MetricCard label="Rodent Vector Sites" value="54" delta={8} tone="warning" icon={Rat}
-          spark={[8, 10, 9, 11, 14, 12, 15, 18, 17, 20, 22, 24]} />
-        <MetricCard label="YTD Confirmed Cases" value="1,189" delta={-3} tone="info" icon={Activity}
-          spark={[60, 80, 75, 92, 88, 105, 100, 118, 120, 130, 138, 142]} />
-        <MetricCard label="Pending Lab Results" value="38" delta={-15} tone="success" icon={FlaskConical}
-          spark={[55, 52, 48, 50, 44, 41, 45, 39, 38, 36, 34, 38]} />
+        <MetricCard label="Active Human Cases" value={fmt(metrics.active.value)} delta={metrics.active.delta} tone="alert" icon={ShieldAlert}
+          spark={metrics.active.spark} />
+        <MetricCard label="Rodent Vector Sites" value={fmt(metrics.rodents.value)} delta={8} tone="warning" icon={Rat}
+          spark={metrics.rodents.spark} />
+        <MetricCard label="YTD Confirmed Cases" value={fmt(metrics.ytd.value)} delta={-3} tone="info" icon={Activity}
+          spark={metrics.ytd.spark} />
+        <MetricCard label="Pending Lab Results" value={fmt(metrics.pending.value)} delta={-15} tone="success" icon={FlaskConical}
+          spark={metrics.pending.spark} />
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
