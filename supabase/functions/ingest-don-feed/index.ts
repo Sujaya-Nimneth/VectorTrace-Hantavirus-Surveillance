@@ -48,6 +48,8 @@
  *        ); $$
  *   );
  */
+// NOTE: If ScrapeGraphAI returns 403 for the WHO endpoint, verify the API key
+// in Supabase secrets or replace SOURCE_URL with an alternate feed.
 
 // deno-lint-ignore-file
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
