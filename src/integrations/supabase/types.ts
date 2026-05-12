@@ -80,6 +80,111 @@ export type Database = {
         }
         Relationships: []
       }
+      infra_api_uptime: {
+        Row: {
+          checked_at: string
+          error_message: string | null
+          id: string
+          latency_ms: number | null
+          service: string
+          status: Database["public"]["Enums"]["infra_status"]
+        }
+        Insert: {
+          checked_at?: string
+          error_message?: string | null
+          id?: string
+          latency_ms?: number | null
+          service: string
+          status: Database["public"]["Enums"]["infra_status"]
+        }
+        Update: {
+          checked_at?: string
+          error_message?: string | null
+          id?: string
+          latency_ms?: number | null
+          service?: string
+          status?: Database["public"]["Enums"]["infra_status"]
+        }
+        Relationships: []
+      }
+      infra_config: {
+        Row: {
+          created_at: string
+          key: string
+          updated_at: string
+          value: string
+        }
+        Insert: {
+          created_at?: string
+          key: string
+          updated_at?: string
+          value: string
+        }
+        Update: {
+          created_at?: string
+          key?: string
+          updated_at?: string
+          value?: string
+        }
+        Relationships: []
+      }
+      infra_db_metrics: {
+        Row: {
+          checked_at: string
+          id: string
+          latency_ms: number
+          pool_max: number
+          pool_used: number
+          source: string
+        }
+        Insert: {
+          checked_at?: string
+          id?: string
+          latency_ms: number
+          pool_max: number
+          pool_used: number
+          source?: string
+        }
+        Update: {
+          checked_at?: string
+          id?: string
+          latency_ms?: number
+          pool_max?: number
+          pool_used?: number
+          source?: string
+        }
+        Relationships: []
+      }
+      infra_ingest_runs: {
+        Row: {
+          error_message: string | null
+          finished_at: string | null
+          id: string
+          records_ingested: number | null
+          source: string
+          started_at: string
+          status: Database["public"]["Enums"]["ingest_status"]
+        }
+        Insert: {
+          error_message?: string | null
+          finished_at?: string | null
+          id?: string
+          records_ingested?: number | null
+          source: string
+          started_at?: string
+          status: Database["public"]["Enums"]["ingest_status"]
+        }
+        Update: {
+          error_message?: string | null
+          finished_at?: string | null
+          id?: string
+          records_ingested?: number | null
+          source?: string
+          started_at?: string
+          status?: Database["public"]["Enums"]["ingest_status"]
+        }
+        Relationships: []
+      }
       rodent_sites: {
         Row: {
           created_at: string
@@ -156,6 +261,8 @@ export type Database = {
       case_sex: "M" | "F"
       case_status: "Confirmed" | "Suspected" | "Pending"
       case_syndrome: "HPS" | "HFRS"
+      infra_status: "ok" | "warn" | "down"
+      ingest_status: "success" | "failed"
     }
     CompositeTypes: {
       [_ in never]: never

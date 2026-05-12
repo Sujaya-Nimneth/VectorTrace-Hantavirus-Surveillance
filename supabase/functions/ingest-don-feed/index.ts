@@ -31,9 +31,11 @@
  *   alter table public.hanta_alerts enable row level security;
  *
  * Required secrets (set via Supabase Dashboard or .env):
- *   SCRAPEGRAPH_API_KEY    – ScrapeGraphAI bearer token
- *   SUPABASE_URL           – auto-injected
+ *   SCRAPEGRAPH_API_KEY       – ScrapeGraphAI bearer token
+ *   SUPABASE_URL              – auto-injected
  *   SUPABASE_SERVICE_ROLE_KEY – auto-injected
+ * Optional:
+ *   INGEST_TOKEN              – bearer token to protect the endpoint
  *
  * Schedule via pg_cron (twice daily, 02:00 and 14:00 UTC):
  *
@@ -53,9 +55,23 @@ import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 const SCRAPE_ENDPOINT = "https://api.scrapegraphai.com/v1/smartscraper";
 const SOURCE_URL = "https://www.who.int/emergencies/disease-outbreak-news";
 
-Deno.serve(async (_req) => {
+const INGEST_SOURCE = "WHO Disease Outbreak News";
+const INGEST_TOKEN = Deno.env.get("INGEST_TOKEN");
+
+Deno.serve(async (req) => {
+  const startedAt = new Date();
+  let ingestedCount = 0;
+  let supabase: ReturnType<typeof createClient> | null = null;
   try {
-    const supabase = createClient(
+    if (INGEST_TOKEN) {
+      const auth = req.headers.get("authorization") ?? "";
+      const token = auth.startsWith("Bearer ") ? auth.slice("Bearer ".length) : "";
+      if (!token || token !== INGEST_TOKEN) {
+        return new Response("Unauthorized", { status: 401 });
+      }
+    }
+
+    supabase = createClient(
       Deno.env.get("SUPABASE_URL")!,
       Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!,
     );
@@ -99,6 +115,7 @@ Deno.serve(async (_req) => {
       .select("id, region, status");
 
     if (error) throw error;
+    ingestedCount = inserted?.length ?? 0;
 
     // Emit a critical alert for every confirmed case ingested in this run.
     const alerts = (inserted ?? [])
@@ -110,13 +127,40 @@ Deno.serve(async (_req) => {
       }));
     if (alerts.length) await supabase.from("hanta_alerts").insert(alerts);
 
+    try {
+      await supabase.from("infra_ingest_runs").insert({
+        source: INGEST_SOURCE,
+        status: "success",
+        started_at: startedAt.toISOString(),
+        finished_at: new Date().toISOString(),
+        records_ingested: ingestedCount,
+        error_message: null,
+      });
+    } catch (logError) {
+      console.error("Failed to record ingest run", logError);
+    }
+
     return Response.json({
       ok: true,
-      ingested: inserted?.length ?? 0,
+      ingested: ingestedCount,
       alerts: alerts.length,
     });
   } catch (e) {
     console.error(e);
+    if (supabase) {
+      try {
+        await supabase.from("infra_ingest_runs").insert({
+          source: INGEST_SOURCE,
+          status: "failed",
+          started_at: startedAt.toISOString(),
+          finished_at: new Date().toISOString(),
+          records_ingested: ingestedCount,
+          error_message: (e as Error).message,
+        });
+      } catch (logError) {
+        console.error("Failed to record ingest run", logError);
+      }
+    }
     return new Response(`error: ${(e as Error).message}`, { status: 500 });
   }
 });

@@ -4,6 +4,7 @@ import { Check, ChevronRight, ChevronLeft, User, Stethoscope, Bug, ClipboardChec
 import { cn } from "@/lib/utils";
 import { Step2Clinical } from "@/components/Step2Clinical";
 import { useAuth } from "@/hooks/use-auth";
+import { useRoles } from "@/hooks/use-roles";
 import { supabase } from "@/integrations/supabase/client";
 
 export const Route = createFileRoute("/intake")({
@@ -31,6 +32,7 @@ type FormState = {
 
 function Intake() {
   const { user, loading } = useAuth();
+  const { isClinician, loading: rolesLoading } = useRoles();
   const navigate = useNavigate();
   const [step, setStep] = useState(1);
   const [busy, setBusy] = useState(false);
@@ -43,7 +45,7 @@ function Intake() {
     exposure: "",
   });
 
-  if (loading) {
+  if (loading || (user && rolesLoading)) {
     return <div className="p-12 text-center text-muted-foreground text-[13px]">Loading…</div>;
   }
   if (!user) {
@@ -56,6 +58,20 @@ function Intake() {
           <Link to="/login"
             className="mt-5 inline-flex items-center gap-1.5 px-4 h-10 rounded-md text-[13px] font-semibold bg-primary text-primary-foreground hover:bg-primary/90">
             <LogIn className="size-4" /> Sign in to continue
+          </Link>
+        </div>
+      </div>
+    );
+  }
+  if (!isClinician) {
+    return (
+      <div className="p-12 max-w-md mx-auto text-center">
+        <div className="bg-card border border-border rounded-lg p-8">
+          <ClipboardCheck className="size-10 mx-auto mb-3 text-primary" />
+          <h2 className="font-bold text-[15px]">Insufficient privileges</h2>
+          <p className="text-[12.5px] text-muted-foreground mt-1.5">Case submission is restricted to admin and epidemiologist roles.</p>
+          <Link to="/" className="mt-5 inline-flex items-center gap-1.5 px-4 h-10 rounded-md text-[13px] font-semibold border border-input hover:bg-muted">
+            Back to dashboard
           </Link>
         </div>
       </div>

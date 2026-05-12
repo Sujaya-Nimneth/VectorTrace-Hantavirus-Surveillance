@@ -4,11 +4,44 @@ import { LineChart, Line, ResponsiveContainer, XAxis, YAxis, Tooltip, CartesianG
 import { ServerCog, Database, Cpu, Lock, ShieldCheck, Zap, Terminal, ShieldOff, LogIn, Loader2 } from "lucide-react";
 import { useAuth } from "@/hooks/use-auth";
 import { useRoles } from "@/hooks/use-roles";
+import { supabase } from "@/integrations/supabase/client";
 
 export const Route = createFileRoute("/admin")({
   component: AdminGate,
   head: () => ({ meta: [{ title: "System Infrastructure · VectorTrace" }] }),
 });
+
+type IngestRun = {
+  source: string;
+  status: "success" | "failed";
+  started_at: string;
+  finished_at: string | null;
+  records_ingested: number | null;
+  error_message: string | null;
+};
+
+type ApiUptime = {
+  service: string;
+  status: "ok" | "warn" | "down";
+  latency_ms: number | null;
+  checked_at: string;
+  error_message: string | null;
+};
+
+type DbMetric = {
+  latency_ms: number;
+  pool_used: number;
+  pool_max: number;
+  checked_at: string;
+};
+
+type SourceStatus = {
+  src: string;
+  apiService: string;
+  last: string;
+  status: "ok" | "warn" | "down";
+  recs: string;
+};
 
 function AdminGate() {
   const { user, loading: authLoading } = useAuth();
@@ -50,10 +83,18 @@ function AdminGate() {
   return <Admin />;
 }
 
-const LATENCY = Array.from({ length: 40 }, (_, i) => ({
+const FALLBACK_LATENCY = Array.from({ length: 40 }, (_, i) => ({
   t: `-${40 - i}m`,
   ms: 80 + Math.round(Math.sin(i / 3) * 30 + Math.random() * 25 + 60),
 }));
+
+const FALLBACK_SOURCES: SourceStatus[] = [
+  { src: "WHO Disease Outbreak News", apiService: "WHO Disease Outbreak News", last: "4m ago", status: "ok", recs: "+3 records" },
+  { src: "PAHO Hantavirus Updates", apiService: "ScrapeGraphAI", last: "12m ago", status: "ok", recs: "+1 record" },
+  { src: "MinSal Argentina · BoEpi", apiService: "ScrapeGraphAI", last: "1h ago", status: "ok", recs: "+8 records" },
+  { src: "ECDC Communicable Disease", apiService: "ScrapeGraphAI", last: "2h ago", status: "warn", recs: "rate-limited" },
+  { src: "ProMED Mail · Hantavirus", apiService: "ScrapeGraphAI", last: "3h ago", status: "ok", recs: "+0 records" },
+];
 
 const INITIAL_LOGS = [
   { ts: "14:02:11", lvl: "OK", msg: "ScrapeGraphAI · WHO DON crawl complete · 3 records inserted" },
@@ -66,8 +107,160 @@ const INITIAL_LOGS = [
   { ts: "13:59:48", lvl: "OK", msg: "row-level-security · policy applied to public.hanta_alerts" },
 ];
 
+function relativeTime(iso: string) {
+  const diff = (Date.now() - +new Date(iso)) / 1000;
+  if (diff < 60) return `${Math.floor(diff)}s ago`;
+  if (diff < 3600) return `${Math.floor(diff / 60)}m ago`;
+  if (diff < 86400) return `${Math.floor(diff / 3600)}h ago`;
+  return `${Math.floor(diff / 86400)}d ago`;
+}
+
+function formatClock(iso: string) {
+  const d = new Date(iso);
+  return `${String(d.getHours()).padStart(2, "0")}:${String(d.getMinutes()).padStart(2, "0")}:${String(d.getSeconds()).padStart(2, "0")}`;
+}
+
 function Admin() {
   const [logs, setLogs] = useState(INITIAL_LOGS);
+  const [latencySeries, setLatencySeries] = useState(FALLBACK_LATENCY);
+  const [sources, setSources] = useState<SourceStatus[]>(FALLBACK_SOURCES);
+  const [cronSummary, setCronSummary] = useState({
+    successRate: 98.2,
+    successCount: 487,
+    totalCount: 496,
+    lastSuccessAt: new Date(Date.now() - 4 * 60 * 1000).toISOString(),
+  });
+  const [dbSnapshot, setDbSnapshot] = useState({
+    avgLatency: 124,
+    p95Latency: 218,
+    poolUsed: 12,
+    poolMax: 64,
+    lastCheckedAt: new Date(Date.now() - 2 * 60 * 1000).toISOString(),
+  });
+
+  useEffect(() => {
+    let cancelled = false;
+
+    const loadInfra = async () => {
+      let lastRun: IngestRun | undefined;
+      let lastSuccess: IngestRun | undefined;
+      const since = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
+      const [runsRes, apiRes, dbRes] = await Promise.all([
+        supabase
+          .from("infra_ingest_runs")
+          .select("source,status,started_at,finished_at,records_ingested,error_message")
+          .gte("started_at", since)
+          .order("started_at", { ascending: false })
+          .limit(200),
+        supabase
+          .from("infra_api_uptime")
+          .select("service,status,latency_ms,checked_at,error_message")
+          .order("checked_at", { ascending: false })
+          .limit(200),
+        supabase
+          .from("infra_db_metrics")
+          .select("latency_ms,pool_used,pool_max,checked_at")
+          .order("checked_at", { ascending: false })
+          .limit(40),
+      ]);
+
+      if (cancelled) return;
+
+      if (runsRes.data?.length) {
+        const runs = runsRes.data as IngestRun[];
+        const successRuns = runs.filter((r) => r.status === "success");
+        const failedRuns = runs.filter((r) => r.status === "failed");
+        lastRun = runs[0];
+        lastSuccess = successRuns[0];
+        const total = runs.length;
+        const success = successRuns.length;
+        const successRate = total ? Math.round((success / total) * 1000) / 10 : 0;
+
+        setCronSummary((prev) => ({
+          successRate,
+          successCount: success,
+          totalCount: total,
+          lastSuccessAt: successRuns[0]?.started_at ?? prev.lastSuccessAt,
+        }));
+
+        const failureLogs = failedRuns.slice(0, 3).map((r) => ({
+          ts: formatClock(r.started_at),
+          lvl: "ERR",
+          msg: `${r.source} ingest failed · ${r.error_message ?? "unknown error"}`,
+        }));
+        if (failureLogs.length) {
+          setLogs((current) => [...failureLogs, ...current].slice(0, 18));
+        }
+
+      }
+
+      if (apiRes.data?.length) {
+        const latest = new Map<string, ApiUptime>();
+        for (const row of apiRes.data as ApiUptime[]) {
+          if (!latest.has(row.service)) latest.set(row.service, row);
+        }
+
+        setSources((prev) =>
+          prev.map((s) => {
+            const row = latest.get(s.apiService);
+            if (!row) return s;
+            return {
+              ...s,
+              status: row.status,
+              last: relativeTime(row.checked_at),
+              recs: row.latency_ms != null ? `${row.latency_ms}ms` : s.recs,
+            };
+          }),
+        );
+      }
+
+      if (lastRun) {
+        setSources((prev) =>
+          prev.map((s) => {
+            if (s.apiService !== "WHO Disease Outbreak News") return s;
+            const status = lastRun.status === "failed" ? "warn" : "ok";
+            const last = lastSuccess ? relativeTime(lastSuccess.started_at) : s.last;
+            const recs = lastSuccess?.records_ingested != null ? `+${lastSuccess.records_ingested} records` : s.recs;
+            return { ...s, status, last, recs };
+          }),
+        );
+      }
+
+      if (dbRes.data?.length) {
+        const dbRows = dbRes.data as DbMetric[];
+        const values = dbRows.map((r) => r.latency_ms).sort((a, b) => a - b);
+        const avg = Math.round(values.reduce((sum, v) => sum + v, 0) / values.length);
+        const p95Index = Math.max(0, Math.floor(values.length * 0.95) - 1);
+        const p95 = values[p95Index];
+        const latest = dbRows[0];
+
+        setDbSnapshot({
+          avgLatency: avg,
+          p95Latency: p95,
+          poolUsed: latest.pool_used,
+          poolMax: latest.pool_max,
+          lastCheckedAt: latest.checked_at,
+        });
+
+        setLatencySeries(
+          dbRows
+            .slice()
+            .reverse()
+            .map((r, i) => ({
+              t: `-${dbRows.length - 1 - i}m`,
+              ms: r.latency_ms,
+            })),
+        );
+      }
+    };
+
+    loadInfra();
+    const id = setInterval(loadInfra, 30000);
+    return () => {
+      cancelled = true;
+      clearInterval(id);
+    };
+  }, []);
 
   useEffect(() => {
     const id = setInterval(() => {
@@ -84,6 +277,17 @@ function Admin() {
     }, 2200);
     return () => clearInterval(id);
   }, []);
+
+  const lastSuccessLabel = cronSummary.lastSuccessAt ? relativeTime(cronSummary.lastSuccessAt) : "—";
+  const poolLabel = dbSnapshot.poolMax ? `${dbSnapshot.poolUsed}/${dbSnapshot.poolMax}` : "n/a";
+  const successAge = cronSummary.lastSuccessAt ? Date.now() - +new Date(cronSummary.lastSuccessAt) : Infinity;
+  const engineTone = cronSummary.successRate >= 95 && successAge < 60 * 60 * 1000 ? "ok" : "warn";
+  const cronTone = cronSummary.successRate >= 95 ? "ok" : "warn";
+  const latencyTone = dbSnapshot.p95Latency <= 220 ? "ok" : "warn";
+  const cronValue = `${cronSummary.successRate.toFixed(1)}%`;
+  const cronSub = `${cronSummary.successCount} / ${cronSummary.totalCount} jobs (24h)`;
+  const engineValue = engineTone === "ok" ? "Healthy" : "Degraded";
+  const engineSub = `Last sync ${lastSuccessLabel} · pool ${poolLabel}`;
 
   return (
     <div className="p-6 space-y-5 max-w-[1600px] mx-auto">
@@ -102,9 +306,9 @@ function Admin() {
 
       {/* Metric cards */}
       <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-        <AdminCard icon={Database} label="Data Engine" value="Healthy" sub="Last sync 4m ago" tone="ok" />
-        <AdminCard icon={Cpu} label="Cron Success" value="98.2%" sub="487 / 496 jobs (24h)" tone="ok" />
-        <AdminCard icon={Zap} label="Avg Latency" value="124ms" sub="p95 = 218ms" tone="warn" />
+        <AdminCard icon={Database} label="Data Engine" value={engineValue} sub={engineSub} tone={engineTone} />
+        <AdminCard icon={Cpu} label="Cron Success" value={cronValue} sub={cronSub} tone={cronTone} />
+        <AdminCard icon={Zap} label="Avg Latency" value={`${dbSnapshot.avgLatency}ms`} sub={`p95 = ${dbSnapshot.p95Latency}ms`} tone={latencyTone} />
         <AdminCard icon={ServerCog} label="Active Channels" value="14" sub="realtime subscribers" tone="ok" />
       </div>
 
@@ -116,10 +320,10 @@ function Admin() {
               <h2 className="text-[14px] font-semibold">API Latency</h2>
               <p className="text-[11.5px] text-muted-foreground">Response time · last 40 minutes</p>
             </div>
-            <div className="text-[11px] text-muted-foreground">avg <span className="text-foreground font-semibold">124ms</span></div>
+            <div className="text-[11px] text-muted-foreground">avg <span className="text-foreground font-semibold">{dbSnapshot.avgLatency}ms</span></div>
           </div>
           <ResponsiveContainer width="100%" height={220}>
-            <LineChart data={LATENCY} margin={{ top: 6, right: 8, bottom: 0, left: -22 }}>
+            <LineChart data={latencySeries} margin={{ top: 6, right: 8, bottom: 0, left: -22 }}>
               <CartesianGrid stroke="var(--border)" vertical={false} />
               <XAxis dataKey="t" tick={{ fontSize: 10, fill: "var(--muted-foreground)" }} interval={6} axisLine={false} tickLine={false} />
               <YAxis tick={{ fontSize: 10, fill: "var(--muted-foreground)" }} axisLine={false} tickLine={false} />
@@ -136,20 +340,14 @@ function Admin() {
             <span className="text-[10px] uppercase tracking-wider px-1.5 py-0.5 rounded bg-success/15 text-success font-semibold">Operational</span>
           </div>
           <div className="space-y-3">
-            {[
-              { src: "WHO Disease Outbreak News", last: "4m ago", status: "ok", recs: "+3 records" },
-              { src: "PAHO Hantavirus Updates", last: "12m ago", status: "ok", recs: "+1 record" },
-              { src: "MinSal Argentina · BoEpi", last: "1h ago", status: "ok", recs: "+8 records" },
-              { src: "ECDC Communicable Disease", last: "2h ago", status: "warn", recs: "rate-limited" },
-              { src: "ProMED Mail · Hantavirus", last: "3h ago", status: "ok", recs: "+0 records" },
-            ].map(s => (
+            {sources.map(s => (
               <div key={s.src} className="flex items-center gap-3 text-[12px]">
-                <div className={`size-2 rounded-full ${s.status === "ok" ? "bg-success" : "bg-warning"}`} />
+                <div className={`size-2 rounded-full ${s.status === "ok" ? "bg-success" : s.status === "down" ? "bg-alert" : "bg-warning"}`} />
                 <div className="flex-1 min-w-0">
                   <div className="font-medium truncate">{s.src}</div>
                   <div className="text-[10.5px] text-muted-foreground">Last sync {s.last}</div>
                 </div>
-                <div className={`text-[11px] font-semibold ${s.status === "ok" ? "text-muted-foreground" : "text-warning"}`}>{s.recs}</div>
+                <div className={`text-[11px] font-semibold ${s.status === "ok" ? "text-muted-foreground" : s.status === "down" ? "text-alert" : "text-warning"}`}>{s.recs}</div>
               </div>
             ))}
           </div>
