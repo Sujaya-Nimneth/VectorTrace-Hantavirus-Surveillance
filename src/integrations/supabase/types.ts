@@ -14,7 +14,108 @@ export type Database = {
   }
   public: {
     Tables: {
-      [_ in never]: never
+      hanta_alerts: {
+        Row: {
+          created_at: string
+          id: string
+          level: Database["public"]["Enums"]["alert_level"]
+          region: string
+          title: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          level?: Database["public"]["Enums"]["alert_level"]
+          region: string
+          title: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          level?: Database["public"]["Enums"]["alert_level"]
+          region?: string
+          title?: string
+        }
+        Relationships: []
+      }
+      hanta_cases: {
+        Row: {
+          age: number | null
+          case_id: string
+          created_at: string
+          id: string
+          lat: number
+          lng: number
+          region: string
+          reported_at: string
+          sex: Database["public"]["Enums"]["case_sex"] | null
+          status: Database["public"]["Enums"]["case_status"]
+          syndrome: Database["public"]["Enums"]["case_syndrome"]
+        }
+        Insert: {
+          age?: number | null
+          case_id: string
+          created_at?: string
+          id?: string
+          lat: number
+          lng: number
+          region: string
+          reported_at?: string
+          sex?: Database["public"]["Enums"]["case_sex"] | null
+          status?: Database["public"]["Enums"]["case_status"]
+          syndrome?: Database["public"]["Enums"]["case_syndrome"]
+        }
+        Update: {
+          age?: number | null
+          case_id?: string
+          created_at?: string
+          id?: string
+          lat?: number
+          lng?: number
+          region?: string
+          reported_at?: string
+          sex?: Database["public"]["Enums"]["case_sex"] | null
+          status?: Database["public"]["Enums"]["case_status"]
+          syndrome?: Database["public"]["Enums"]["case_syndrome"]
+        }
+        Relationships: []
+      }
+      rodent_sites: {
+        Row: {
+          created_at: string
+          id: string
+          lat: number
+          lng: number
+          positivity: number
+          region: string
+          sampled_at: string
+          site_id: string
+          species: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          lat: number
+          lng: number
+          positivity?: number
+          region: string
+          sampled_at?: string
+          site_id: string
+          species: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          lat?: number
+          lng?: number
+          positivity?: number
+          region?: string
+          sampled_at?: string
+          site_id?: string
+          species?: string
+        }
+        Relationships: []
+      }
     }
     Views: {
       [_ in never]: never
@@ -23,7 +124,10 @@ export type Database = {
       [_ in never]: never
     }
     Enums: {
-      [_ in never]: never
+      alert_level: "critical" | "warning" | "info"
+      case_sex: "M" | "F"
+      case_status: "Confirmed" | "Suspected" | "Pending"
+      case_syndrome: "HPS" | "HFRS"
     }
     CompositeTypes: {
       [_ in never]: never
@@ -150,6 +254,11 @@ export type CompositeTypes<
 
 export const Constants = {
   public: {
-    Enums: {},
+    Enums: {
+      alert_level: ["critical", "warning", "info"],
+      case_sex: ["M", "F"],
+      case_status: ["Confirmed", "Suspected", "Pending"],
+      case_syndrome: ["HPS", "HFRS"],
+    },
   },
 } as const
