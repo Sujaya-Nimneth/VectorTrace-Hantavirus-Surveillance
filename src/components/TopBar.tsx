@@ -60,7 +60,7 @@ export function TopBar() {
             </div>
             <div className="text-left leading-tight max-w-[160px] truncate">
               <div className="text-[12px] font-semibold truncate">{user.email}</div>
-              <div className="text-[10px] text-muted-foreground">Epidemiologist</div>
+              <div className="text-[10px] text-muted-foreground capitalize">{isAdmin ? "Admin" : roles[0] ?? "viewer"}</div>
             </div>
             <ChevronDown className="size-3.5 text-muted-foreground" />
           </button>
