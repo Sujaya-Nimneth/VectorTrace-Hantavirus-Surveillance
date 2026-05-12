@@ -45,7 +45,7 @@ export function useCases() {
   useEffect(() => {
     supabase.from("hanta_cases").select("*").order("reported_at", { ascending: false }).limit(500)
       .then(({ data: rows }) => { setData((rows ?? []).map(mapCase as any)); setLoading(false); });
-    const ch = supabase.channel("rt-cases")
+    const ch = supabase.channel(`rt-cases-${crypto.randomUUID()}`)
       .on("postgres_changes", { event: "*", schema: "public", table: "hanta_cases" }, payload => {
         if (payload.eventType === "INSERT") setData(d => [mapCase(payload.new as DbCase), ...d]);
       }).subscribe();
