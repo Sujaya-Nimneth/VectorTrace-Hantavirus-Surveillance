@@ -1,8 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { MapContainer, TileLayer, CircleMarker, Marker, Popup, Tooltip, useMap } from "react-leaflet";
 import L from "leaflet";
-import { CASES } from "@/lib/mock-cases";
-import { RODENTS } from "@/lib/mock-rodents";
+import { useCases, useRodents } from "@/hooks/use-surveillance";
 import type { Case } from "@/lib/mock-data";
 import { Layers, Calendar, X, MapPin, AlertTriangle, Rat, Activity } from "lucide-react";
 import { cn } from "@/lib/utils";

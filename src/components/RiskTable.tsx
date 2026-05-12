@@ -1,10 +1,11 @@
 import { useMemo } from "react";
-import { CASES } from "@/lib/mock-cases";
+import { useCases } from "@/hooks/use-surveillance";
 import { REGIONS } from "@/lib/mock-data";
 import { TrendingUp } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 export function RiskTable() {
+  const { data: CASES } = useCases();
   const rows = useMemo(() => {
     return REGIONS.map(r => {
       const cases = CASES.filter(c => c.region === r.name);
@@ -12,7 +13,7 @@ export function RiskTable() {
       const rate = (cases.length / r.pop) * 100000;
       return { region: r.name, total: cases.length, confirmed: conf, rate: +rate.toFixed(2), pop: r.pop };
     }).sort((a, b) => b.rate - a.rate);
-  }, []);
+  }, [CASES]);
 
   const max = rows[0]?.rate || 1;
 

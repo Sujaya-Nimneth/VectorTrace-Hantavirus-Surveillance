@@ -1,9 +1,10 @@
 import { useMemo } from "react";
 import { Line, ComposedChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid, Legend } from "recharts";
-import { CASES } from "@/lib/mock-cases";
+import { useCases } from "@/hooks/use-surveillance";
 import { REGIONS } from "@/lib/mock-data";
 
 export function EpidemicCurve() {
+  const { data: CASES } = useCases();
   const data = useMemo(() => {
     const buckets: Record<string, any> = {};
     const now = new Date();
@@ -29,7 +30,7 @@ export function EpidemicCurve() {
       row.trend = +avg.toFixed(1);
     });
     return arr;
-  }, []);
+  }, [CASES]);
 
   const palette = ["var(--chart-3)", "var(--chart-2)", "var(--chart-1)", "var(--chart-4)", "var(--chart-5)", "var(--primary)"];
 
