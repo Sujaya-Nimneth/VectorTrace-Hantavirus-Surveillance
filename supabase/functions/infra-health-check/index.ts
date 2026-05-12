@@ -2,7 +2,7 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 
 const SERVICES = [
-  { name: "ScrapeGraphAI", url: "https://api.scrapegraphai.com" },
+  { name: "Firecrawl", url: "https://api.firecrawl.dev" },
   { name: "WHO Disease Outbreak News", url: "https://www.who.int/emergencies/disease-outbreak-news" },
   { name: "Supabase REST", url: "{{SUPABASE_URL}}/rest/v1/" },
 ];
