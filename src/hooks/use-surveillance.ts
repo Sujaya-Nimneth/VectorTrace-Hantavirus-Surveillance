@@ -59,7 +59,7 @@ export function useRodents() {
   useEffect(() => {
     supabase.from("rodent_sites").select("*").order("sampled_at", { ascending: false }).limit(500)
       .then(({ data: rows }) => setData((rows ?? []).map(mapRodent as any)));
-    const ch = supabase.channel("rt-rodents")
+    const ch = supabase.channel(`rt-rodents-${crypto.randomUUID()}`)
       .on("postgres_changes", { event: "INSERT", schema: "public", table: "rodent_sites" }, payload => {
         setData(d => [mapRodent(payload.new as DbRodent), ...d]);
       }).subscribe();
