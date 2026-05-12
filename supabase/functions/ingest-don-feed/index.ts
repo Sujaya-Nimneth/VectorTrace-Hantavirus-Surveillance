@@ -4,7 +4,7 @@
  * Pulls WHO Disease Outbreak News (DONs) using ScrapeGraphAI and writes
  * normalized rows into `hanta_cases` and `hanta_alerts`.
  *
- * Required tables (run as a migration once Lovable Cloud is enabled):
+ * Required tables (run as a migration in your Supabase project):
  *
  *   create table public.hanta_cases (
  *     id uuid primary key default gen_random_uuid(),
@@ -30,7 +30,7 @@
  *   );
  *   alter table public.hanta_alerts enable row level security;
  *
- * Required secrets (set via Lovable Cloud secrets UI):
+ * Required secrets (set via Supabase Dashboard or .env):
  *   SCRAPEGRAPH_API_KEY    – ScrapeGraphAI bearer token
  *   SUPABASE_URL           – auto-injected
  *   SUPABASE_SERVICE_ROLE_KEY – auto-injected
