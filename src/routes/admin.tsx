@@ -1,12 +1,54 @@
-import { createFileRoute } from "@tanstack/react-router";
+import { createFileRoute, Link } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
 import { LineChart, Line, ResponsiveContainer, XAxis, YAxis, Tooltip, CartesianGrid } from "recharts";
-import { ServerCog, Database, Cpu, Lock, ShieldCheck, Zap, Terminal } from "lucide-react";
+import { ServerCog, Database, Cpu, Lock, ShieldCheck, Zap, Terminal, ShieldOff, LogIn, Loader2 } from "lucide-react";
+import { useAuth } from "@/hooks/use-auth";
+import { useRoles } from "@/hooks/use-roles";
 
 export const Route = createFileRoute("/admin")({
-  component: Admin,
+  component: AdminGate,
   head: () => ({ meta: [{ title: "System Infrastructure · VectorTrace" }] }),
 });
+
+function AdminGate() {
+  const { user, loading: authLoading } = useAuth();
+  const { isAdmin, loading: rolesLoading } = useRoles();
+
+  if (authLoading || (user && rolesLoading)) {
+    return <div className="h-full grid place-items-center text-muted-foreground p-12"><Loader2 className="size-5 animate-spin" /></div>;
+  }
+  if (!user) {
+    return (
+      <div className="p-12 max-w-md mx-auto text-center">
+        <div className="bg-card border border-border rounded-lg p-8">
+          <ShieldOff className="size-10 mx-auto mb-3 text-alert" />
+          <h2 className="font-bold text-[15px]">Authentication required</h2>
+          <p className="text-[12.5px] text-muted-foreground mt-1.5">The infrastructure console is restricted to admin users.</p>
+          <Link to="/login" className="mt-5 inline-flex items-center gap-1.5 px-4 h-10 rounded-md text-[13px] font-semibold bg-primary text-primary-foreground hover:bg-primary/90">
+            <LogIn className="size-4" /> Sign in
+          </Link>
+        </div>
+      </div>
+    );
+  }
+  if (!isAdmin) {
+    return (
+      <div className="p-12 max-w-md mx-auto text-center">
+        <div className="bg-card border border-border rounded-lg p-8">
+          <ShieldOff className="size-10 mx-auto mb-3 text-alert" />
+          <h2 className="font-bold text-[15px]">Insufficient privileges</h2>
+          <p className="text-[12.5px] text-muted-foreground mt-1.5">
+            Account <span className="font-mono text-foreground">{user.email}</span> doesn't hold the admin role required for this console.
+          </p>
+          <Link to="/" className="mt-5 inline-flex items-center gap-1.5 px-4 h-10 rounded-md text-[13px] font-semibold border border-input hover:bg-muted">
+            Back to dashboard
+          </Link>
+        </div>
+      </div>
+    );
+  }
+  return <Admin />;
+}
 
 const LATENCY = Array.from({ length: 40 }, (_, i) => ({
   t: `-${40 - i}m`,
