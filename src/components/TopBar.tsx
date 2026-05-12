@@ -2,6 +2,7 @@ import { useRouterState, Link, useNavigate } from "@tanstack/react-router";
 import { Bell, Search, ChevronDown, ChevronRight, LogOut, LogIn } from "lucide-react";
 import { useState, useRef, useEffect } from "react";
 import { useAuth } from "@/hooks/use-auth";
+import { useRoles } from "@/hooks/use-roles";
 
 const labels: Record<string, string> = {
   "/": "Executive Dashboard",
@@ -14,6 +15,7 @@ export function TopBar() {
   const path = useRouterState({ select: (s) => s.location.pathname });
   const label = labels[path] ?? "VectorTrace";
   const { user, signOut } = useAuth();
+  const { roles, isAdmin } = useRoles();
   const navigate = useNavigate();
   const [open, setOpen] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
@@ -58,7 +60,7 @@ export function TopBar() {
             </div>
             <div className="text-left leading-tight max-w-[160px] truncate">
               <div className="text-[12px] font-semibold truncate">{user.email}</div>
-              <div className="text-[10px] text-muted-foreground">Epidemiologist</div>
+              <div className="text-[10px] text-muted-foreground capitalize">{isAdmin ? "Admin" : roles[0] ?? "viewer"}</div>
             </div>
             <ChevronDown className="size-3.5 text-muted-foreground" />
           </button>

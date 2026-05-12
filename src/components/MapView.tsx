@@ -1,10 +1,24 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { MapContainer, TileLayer, CircleMarker, Marker, Popup, Tooltip, useMap } from "react-leaflet";
 import L from "leaflet";
+import "leaflet.heat";
 import { useCases, useRodents } from "@/hooks/use-surveillance";
 import type { Case } from "@/lib/mock-data";
 import { Layers, Calendar, X, MapPin, AlertTriangle, Rat, Activity } from "lucide-react";
 import { cn } from "@/lib/utils";
+
+function HeatLayer({ points }: { points: [number, number, number][] }) {
+  const map = useMap();
+  useEffect(() => {
+    const layer = (L as any).heatLayer(points, {
+      radius: 28, blur: 22, maxZoom: 9, minOpacity: 0.25,
+      gradient: { 0.2: "#fbbf24", 0.5: "#f97316", 0.8: "#ef4444", 1.0: "#dc2626" },
+    });
+    layer.addTo(map);
+    return () => { map.removeLayer(layer); };
+  }, [map, points]);
+  return null;
+}
 
 const rodentIcon = L.divIcon({
   className: "",
@@ -69,10 +83,9 @@ export default function MapView() {
           url="https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png"
         />
         {points.length > 0 && <FitBounds points={points} />}
-        {layers.density && visibleCases.map(c => (
-          <CircleMarker key={`d-${c.id}`} center={[c.lat, c.lng]} radius={28}
-            pathOptions={{ color: "transparent", fillColor: "oklch(0.7 0.18 50)", fillOpacity: 0.07 }} />
-        ))}
+        {layers.density && visibleCases.length > 0 && (
+          <HeatLayer points={visibleCases.map(c => [c.lat, c.lng, c.status === "Confirmed" ? 1 : 0.6])} />
+        )}
         {layers.cases && visibleCases.map(c => (
           <CircleMarker key={c.id} center={[c.lat, c.lng]} radius={6}
             pathOptions={{
