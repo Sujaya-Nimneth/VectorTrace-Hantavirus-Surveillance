@@ -45,7 +45,7 @@ export function useCases() {
   useEffect(() => {
     supabase.from("hanta_cases").select("*").order("reported_at", { ascending: false }).limit(500)
       .then(({ data: rows }) => { setData((rows ?? []).map(mapCase as any)); setLoading(false); });
-    const ch = supabase.channel("rt-cases")
+    const ch = supabase.channel(`rt-cases-${crypto.randomUUID()}`)
       .on("postgres_changes", { event: "*", schema: "public", table: "hanta_cases" }, payload => {
         if (payload.eventType === "INSERT") setData(d => [mapCase(payload.new as DbCase), ...d]);
       }).subscribe();
@@ -59,7 +59,7 @@ export function useRodents() {
   useEffect(() => {
     supabase.from("rodent_sites").select("*").order("sampled_at", { ascending: false }).limit(500)
       .then(({ data: rows }) => setData((rows ?? []).map(mapRodent as any)));
-    const ch = supabase.channel("rt-rodents")
+    const ch = supabase.channel(`rt-rodents-${crypto.randomUUID()}`)
       .on("postgres_changes", { event: "INSERT", schema: "public", table: "rodent_sites" }, payload => {
         setData(d => [mapRodent(payload.new as DbRodent), ...d]);
       }).subscribe();
@@ -73,7 +73,7 @@ export function useAlerts() {
   useEffect(() => {
     supabase.from("hanta_alerts").select("*").order("created_at", { ascending: false }).limit(20)
       .then(({ data: rows }) => setData((rows ?? []).map(mapAlert as any)));
-    const ch = supabase.channel("rt-alerts")
+    const ch = supabase.channel(`rt-alerts-${crypto.randomUUID()}`)
       .on("postgres_changes", { event: "INSERT", schema: "public", table: "hanta_alerts" }, payload => {
         setData(d => [mapAlert(payload.new as DbAlert), ...d].slice(0, 20));
       }).subscribe();

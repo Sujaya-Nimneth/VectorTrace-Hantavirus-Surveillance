@@ -9,14 +9,22 @@ import { cn } from "@/lib/utils";
 
 function HeatLayer({ points }: { points: [number, number, number][] }) {
   const map = useMap();
+  const layerRef = (useMemo(() => ({ current: null as any }), []));
   useEffect(() => {
-    const layer = (L as any).heatLayer(points, {
+    const layer = (L as any).heatLayer([], {
       radius: 28, blur: 22, maxZoom: 9, minOpacity: 0.25,
       gradient: { 0.2: "#fbbf24", 0.5: "#f97316", 0.8: "#ef4444", 1.0: "#dc2626" },
     });
     layer.addTo(map);
-    return () => { map.removeLayer(layer); };
-  }, [map, points]);
+    layerRef.current = layer;
+    return () => {
+      try { map.removeLayer(layer); } catch { /* ignore */ }
+      layerRef.current = null;
+    };
+  }, [map, layerRef]);
+  useEffect(() => {
+    if (layerRef.current) layerRef.current.setLatLngs(points);
+  }, [points, layerRef]);
   return null;
 }
 
@@ -29,7 +37,10 @@ const rodentIcon = L.divIcon({
 function FitBounds({ points }: { points: [number, number][] }) {
   const map = useMap();
   useEffect(() => {
-    if (points.length) map.fitBounds(points as any, { padding: [40, 40] });
+    if (points.length) {
+      try { map.fitBounds(points as any, { padding: [40, 40] }); } catch { /* ignore */ }
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
   return null;
 }
