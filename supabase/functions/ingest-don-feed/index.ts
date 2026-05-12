@@ -1,7 +1,7 @@
 /**
  * Supabase Edge Function: ingest-don-feed
  * --------------------------------------
- * Pulls WHO Disease Outbreak News (DONs) using ScrapeGraphAI and writes
+ * Pulls WHO Disease Outbreak News (DONs) using Firecrawl and writes
  * normalized rows into `hanta_cases` and `hanta_alerts`.
  *
  * Required tables (run as a migration in your Supabase project):
@@ -31,11 +31,11 @@
  *   alter table public.hanta_alerts enable row level security;
  *
  * Required secrets (set via Supabase Dashboard or .env):
- *   SCRAPEGRAPH_API_KEY       – ScrapeGraphAI bearer token
- *   SUPABASE_URL              – auto-injected
- *   SUPABASE_SERVICE_ROLE_KEY – auto-injected
+ *   FIRECRAWL_API_KEY          – Firecrawl bearer token
+ *   SUPABASE_URL               – auto-injected
+ *   SUPABASE_SERVICE_ROLE_KEY  – auto-injected
  * Optional:
- *   INGEST_TOKEN              – bearer token to protect the endpoint
+ *   INGEST_TOKEN               – bearer token to protect the endpoint
  *
  * Schedule via pg_cron (twice daily, 02:00 and 14:00 UTC):
  *
@@ -48,13 +48,11 @@
  *        ); $$
  *   );
  */
-// NOTE: If ScrapeGraphAI returns 403 for the WHO endpoint, verify the API key
-// in Supabase secrets or replace SOURCE_URL with an alternate feed.
 
 // deno-lint-ignore-file
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 
-const SCRAPE_ENDPOINT = "https://api.scrapegraphai.com/v1/smartscraper";
+const FIRECRAWL_SCRAPE_ENDPOINT = "https://api.firecrawl.dev/v2/scrape";
 const SOURCE_URL = "https://www.who.int/emergencies/disease-outbreak-news";
 
 const INGEST_SOURCE = "WHO Disease Outbreak News";
@@ -78,42 +76,110 @@ Deno.serve(async (req) => {
       Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!,
     );
 
-    const scrape = await fetch(SCRAPE_ENDPOINT, {
+    // --- Step 1: Scrape the WHO DON page using Firecrawl ---
+    const firecrawlKey = Deno.env.get("FIRECRAWL_API_KEY");
+    if (!firecrawlKey) {
+      return new Response("FIRECRAWL_API_KEY secret is not set", { status: 500 });
+    }
+
+    const scrape = await fetch(FIRECRAWL_SCRAPE_ENDPOINT, {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
-        "Authorization": `Bearer ${Deno.env.get("SCRAPEGRAPH_API_KEY")}`,
+        "Authorization": `Bearer ${firecrawlKey}`,
       },
       body: JSON.stringify({
-        website_url: SOURCE_URL,
-        user_prompt:
-          "Extract every Disease Outbreak News item mentioning hantavirus. " +
-          "Return a JSON array with: external_id, region, lat, lng, " +
-          "reported_at (ISO8601), syndrome (HPS|HFRS), status (Confirmed|Suspected|Pending), summary.",
+        url: SOURCE_URL,
+        formats: [
+          "markdown",
+          {
+            type: "json",
+            schema: {
+              type: "object",
+              properties: {
+                items: {
+                  type: "array",
+                  items: {
+                    type: "object",
+                    properties: {
+                      case_id: { type: "string", description: "A unique identifier for the DON item, e.g. slug or URL path segment" },
+                      region: { type: "string", description: "Country or region name" },
+                      lat: { type: "number", description: "Approximate latitude of the region" },
+                      lng: { type: "number", description: "Approximate longitude of the region" },
+                      reported_at: { type: "string", description: "Date of the report in ISO 8601 format" },
+                      syndrome: { type: "string", enum: ["HPS", "HFRS"], description: "Hantavirus syndrome type" },
+                      status: { type: "string", enum: ["Confirmed", "Suspected", "Pending"], description: "Case status" },
+                      summary: { type: "string", description: "Brief summary of the outbreak news item" },
+                    },
+                    required: ["case_id", "region", "reported_at"],
+                  },
+                },
+              },
+              required: ["items"],
+            },
+          },
+        ],
+        onlyMainContent: true,
+        timeout: 120000,
       }),
     });
 
     if (!scrape.ok) {
-      return new Response(`scrape failed: ${scrape.status}`, { status: 502 });
+      const errText = await scrape.text();
+      return new Response(`scrape failed: ${scrape.status} – ${errText}`, { status: 502 });
     }
-    const { result } = await scrape.json();
-    const items: any[] = Array.isArray(result) ? result : result?.items ?? [];
+
+    const scrapeResult = await scrape.json();
+
+    // Firecrawl returns { success, data: { json: { ... }, markdown, ... } }
+    const jsonData = scrapeResult?.data?.json ?? scrapeResult?.data ?? {};
+    const rawItems: any[] = Array.isArray(jsonData)
+      ? jsonData
+      : jsonData?.items ?? [];
+
+    // Filter for hantavirus-related items only
+    const hantaKeywords = ["hantavirus", "hanta", "hps", "hfrs", "hemorrhagic fever with renal syndrome", "hantavirus pulmonary syndrome"];
+    const items = rawItems.filter((it) => {
+      const text = JSON.stringify(it).toLowerCase();
+      return hantaKeywords.some((kw) => text.includes(kw));
+    });
 
     const cases = items.map((it) => ({
-      external_id: it.external_id,
+      case_id: it.case_id ?? it.external_id ?? `don-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
       region: it.region ?? "Unknown",
-      lat: it.lat ?? null,
-      lng: it.lng ?? null,
+      lat: it.lat ?? 0,
+      lng: it.lng ?? 0,
       reported_at: it.reported_at ?? new Date().toISOString(),
       syndrome: it.syndrome ?? "HPS",
       status: it.status ?? "Suspected",
-      source: "WHO_DON",
-      raw: it,
     }));
+
+    if (cases.length === 0) {
+      // No hantavirus items found – log the run but don't error
+      try {
+        await supabase.from("infra_ingest_runs").insert({
+          source: INGEST_SOURCE,
+          status: "success",
+          started_at: startedAt.toISOString(),
+          finished_at: new Date().toISOString(),
+          records_ingested: 0,
+          error_message: null,
+        });
+      } catch (logError) {
+        console.error("Failed to record ingest run", logError);
+      }
+
+      return Response.json({
+        ok: true,
+        ingested: 0,
+        alerts: 0,
+        note: `Scraped ${rawItems.length} DON items, none matched hantavirus keywords.`,
+      });
+    }
 
     const { data: inserted, error } = await supabase
       .from("hanta_cases")
-      .upsert(cases, { onConflict: "external_id", ignoreDuplicates: true })
+      .upsert(cases, { onConflict: "case_id", ignoreDuplicates: true })
       .select("id, region, status");
 
     if (error) throw error;
