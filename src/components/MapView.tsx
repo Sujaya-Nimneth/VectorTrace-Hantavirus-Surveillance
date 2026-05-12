@@ -1,10 +1,25 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { MapContainer, TileLayer, CircleMarker, Marker, Popup, Tooltip, useMap } from "react-leaflet";
 import L from "leaflet";
+import "leaflet.heat";
 import { useCases, useRodents } from "@/hooks/use-surveillance";
 import type { Case } from "@/lib/mock-data";
 import { Layers, Calendar, X, MapPin, AlertTriangle, Rat, Activity } from "lucide-react";
 import { cn } from "@/lib/utils";
+
+function HeatLayer({ points }: { points: [number, number, number][] }) {
+  const map = useMap();
+  useEffect(() => {
+    // @ts-expect-error leaflet.heat augments L
+    const layer = L.heatLayer(points, {
+      radius: 28, blur: 22, maxZoom: 9, minOpacity: 0.25,
+      gradient: { 0.2: "#fbbf24", 0.5: "#f97316", 0.8: "#ef4444", 1.0: "#dc2626" },
+    });
+    layer.addTo(map);
+    return () => { map.removeLayer(layer); };
+  }, [map, points]);
+  return null;
+}
 
 const rodentIcon = L.divIcon({
   className: "",
