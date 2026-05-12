@@ -83,10 +83,9 @@ export default function MapView() {
           url="https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png"
         />
         {points.length > 0 && <FitBounds points={points} />}
-        {layers.density && visibleCases.map(c => (
-          <CircleMarker key={`d-${c.id}`} center={[c.lat, c.lng]} radius={28}
-            pathOptions={{ color: "transparent", fillColor: "oklch(0.7 0.18 50)", fillOpacity: 0.07 }} />
-        ))}
+        {layers.density && visibleCases.length > 0 && (
+          <HeatLayer points={visibleCases.map(c => [c.lat, c.lng, c.status === "Confirmed" ? 1 : 0.6])} />
+        )}
         {layers.cases && visibleCases.map(c => (
           <CircleMarker key={c.id} center={[c.lat, c.lng]} radius={6}
             pathOptions={{
