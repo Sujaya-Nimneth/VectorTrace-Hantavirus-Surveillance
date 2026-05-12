@@ -1,8 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { MapContainer, TileLayer, CircleMarker, Marker, Popup, Tooltip, useMap } from "react-leaflet";
 import L from "leaflet";
-import { CASES } from "@/lib/mock-cases";
-import { RODENTS } from "@/lib/mock-rodents";
+import { useCases, useRodents } from "@/hooks/use-surveillance";
 import type { Case } from "@/lib/mock-data";
 import { Layers, Calendar, X, MapPin, AlertTriangle, Rat, Activity } from "lucide-react";
 import { cn } from "@/lib/utils";
@@ -31,15 +30,17 @@ export default function MapView() {
   const [layers, setLayers] = useState({ cases: true, rodents: true, density: true });
   const [range, setRange] = useState(30);
   const [selected, setSelected] = useState<Case | null>(null);
+  const { data: CASES } = useCases();
+  const RODENTS = useRodents();
 
   const now = Date.now();
   const visibleCases = useMemo(
     () => CASES.filter(c => (now - +new Date(c.date)) / 86400000 <= range),
-    [range],
+    [range, CASES, now],
   );
   const visibleRodents = useMemo(
     () => RODENTS.filter(r => (now - +new Date(r.date)) / 86400000 <= range),
-    [range],
+    [range, RODENTS, now],
   );
 
   const points: [number, number][] = useMemo(
