@@ -30,15 +30,17 @@ export default function MapView() {
   const [layers, setLayers] = useState({ cases: true, rodents: true, density: true });
   const [range, setRange] = useState(30);
   const [selected, setSelected] = useState<Case | null>(null);
+  const { data: CASES } = useCases();
+  const RODENTS = useRodents();
 
   const now = Date.now();
   const visibleCases = useMemo(
     () => CASES.filter(c => (now - +new Date(c.date)) / 86400000 <= range),
-    [range],
+    [range, CASES, now],
   );
   const visibleRodents = useMemo(
     () => RODENTS.filter(r => (now - +new Date(r.date)) / 86400000 <= range),
-    [range],
+    [range, RODENTS, now],
   );
 
   const points: [number, number][] = useMemo(
