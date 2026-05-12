@@ -3,7 +3,7 @@ import { useEffect, useState } from "react";
 import { LineChart, Line, ResponsiveContainer, XAxis, YAxis, Tooltip, CartesianGrid } from "recharts";
 import { ServerCog, Database, Cpu, Lock, ShieldCheck, Zap, Terminal } from "lucide-react";
 
-export const Route = createFileRoute("/admin")({
+export const Route = createFileRoute("/_admin/admin")({
   component: Admin,
   head: () => ({ meta: [{ title: "System Infrastructure · VectorTrace" }] }),
 });
