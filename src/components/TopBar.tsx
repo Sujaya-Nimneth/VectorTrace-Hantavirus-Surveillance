@@ -1,5 +1,7 @@
-import { useRouterState } from "@tanstack/react-router";
-import { Bell, Search, ChevronDown, ChevronRight } from "lucide-react";
+import { useRouterState, Link, useNavigate } from "@tanstack/react-router";
+import { Bell, Search, ChevronDown, ChevronRight, LogOut, LogIn } from "lucide-react";
+import { useState, useRef, useEffect } from "react";
+import { useAuth } from "@/hooks/use-auth";
 
 const labels: Record<string, string> = {
   "/": "Executive Dashboard",
@@ -11,6 +13,20 @@ const labels: Record<string, string> = {
 export function TopBar() {
   const path = useRouterState({ select: (s) => s.location.pathname });
   const label = labels[path] ?? "VectorTrace";
+  const { user, signOut } = useAuth();
+  const navigate = useNavigate();
+  const [open, setOpen] = useState(false);
+  const ref = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    const onClick = (e: MouseEvent) => {
+      if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false);
+    };
+    document.addEventListener("mousedown", onClick);
+    return () => document.removeEventListener("mousedown", onClick);
+  }, []);
+
+  const initials = user?.email?.slice(0, 2).toUpperCase() ?? "??";
 
   return (
     <header className="h-14 shrink-0 bg-card border-b border-border flex items-center px-6 gap-4">
@@ -33,16 +49,34 @@ export function TopBar() {
         <span className="absolute top-1.5 right-1.5 size-2 rounded-full bg-alert ring-2 ring-card" />
       </button>
 
-      <button className="flex items-center gap-2.5 pl-1 pr-2 py-1 rounded-md hover:bg-muted transition-colors">
-        <div className="size-7 rounded-full bg-gradient-to-br from-primary to-teal text-white text-[11px] font-bold grid place-items-center">
-          DR
+      {user ? (
+        <div ref={ref} className="relative">
+          <button onClick={() => setOpen(o => !o)}
+            className="flex items-center gap-2.5 pl-1 pr-2 py-1 rounded-md hover:bg-muted transition-colors">
+            <div className="size-7 rounded-full bg-gradient-to-br from-primary to-teal text-white text-[11px] font-bold grid place-items-center">
+              {initials}
+            </div>
+            <div className="text-left leading-tight max-w-[160px] truncate">
+              <div className="text-[12px] font-semibold truncate">{user.email}</div>
+              <div className="text-[10px] text-muted-foreground">Epidemiologist</div>
+            </div>
+            <ChevronDown className="size-3.5 text-muted-foreground" />
+          </button>
+          {open && (
+            <div className="absolute right-0 mt-1 w-48 bg-card border border-border rounded-md shadow-lg p-1 z-50">
+              <button onClick={async () => { await signOut(); setOpen(false); navigate({ to: "/login" }); }}
+                className="w-full flex items-center gap-2 px-3 py-2 rounded text-[13px] hover:bg-muted text-left">
+                <LogOut className="size-3.5" /> Sign out
+              </button>
+            </div>
+          )}
         </div>
-        <div className="text-left leading-tight">
-          <div className="text-[12px] font-semibold">Dr. Reyes</div>
-          <div className="text-[10px] text-muted-foreground">Epidemiologist</div>
-        </div>
-        <ChevronDown className="size-3.5 text-muted-foreground" />
-      </button>
+      ) : (
+        <Link to="/login"
+          className="inline-flex items-center gap-1.5 px-3 h-9 rounded-md text-[13px] font-semibold bg-primary text-primary-foreground hover:bg-primary/90">
+          <LogIn className="size-3.5" /> Sign in
+        </Link>
+      )}
     </header>
   );
 }
