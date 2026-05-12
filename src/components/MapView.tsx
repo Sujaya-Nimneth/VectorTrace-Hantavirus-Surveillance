@@ -10,8 +10,7 @@ import { cn } from "@/lib/utils";
 function HeatLayer({ points }: { points: [number, number, number][] }) {
   const map = useMap();
   useEffect(() => {
-    // @ts-expect-error leaflet.heat augments L
-    const layer = L.heatLayer(points, {
+    const layer = (L as any).heatLayer(points, {
       radius: 28, blur: 22, maxZoom: 9, minOpacity: 0.25,
       gradient: { 0.2: "#fbbf24", 0.5: "#f97316", 0.8: "#ef4444", 1.0: "#dc2626" },
     });
