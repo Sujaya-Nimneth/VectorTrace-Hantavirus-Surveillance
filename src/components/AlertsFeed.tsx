@@ -1,5 +1,5 @@
-import { ALERTS } from "@/lib/mock-alerts";
-import { AlertTriangle, AlertCircle, Info } from "lucide-react";
+import { useAlerts } from "@/hooks/use-surveillance";
+import { AlertTriangle, AlertCircle, Info, Loader2 } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 const cfg = {
@@ -9,9 +9,15 @@ const cfg = {
 };
 
 export function AlertsFeed() {
+  const alerts = useAlerts();
+  if (!alerts.length) return (
+    <div className="h-32 grid place-items-center text-muted-foreground text-[12px]">
+      <Loader2 className="size-4 animate-spin" />
+    </div>
+  );
   return (
     <div className="space-y-2 max-h-[280px] overflow-y-auto pr-1 -mr-1">
-      {ALERTS.map(a => {
+      {alerts.map(a => {
         const c = cfg[a.level];
         const I = c.icon;
         return (
