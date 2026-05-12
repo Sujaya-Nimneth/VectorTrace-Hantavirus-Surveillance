@@ -73,7 +73,7 @@ export function useAlerts() {
   useEffect(() => {
     supabase.from("hanta_alerts").select("*").order("created_at", { ascending: false }).limit(20)
       .then(({ data: rows }) => setData((rows ?? []).map(mapAlert as any)));
-    const ch = supabase.channel("rt-alerts")
+    const ch = supabase.channel(`rt-alerts-${crypto.randomUUID()}`)
       .on("postgres_changes", { event: "INSERT", schema: "public", table: "hanta_alerts" }, payload => {
         setData(d => [mapAlert(payload.new as DbAlert), ...d].slice(0, 20));
       }).subscribe();
