@@ -9,6 +9,7 @@ import {
 } from "@tanstack/react-router";
 
 import appCss from "../styles.css?url";
+import { AppLayout } from "@/components/AppLayout";
 
 function NotFoundComponent() {
   return (
@@ -72,14 +73,14 @@ export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()(
     meta: [
       { charSet: "utf-8" },
       { name: "viewport", content: "width=device-width, initial-scale=1" },
-      { title: "Lovable App" },
-      { name: "description", content: "Lovable Generated Project" },
-      { name: "author", content: "Lovable" },
-      { property: "og:title", content: "Lovable App" },
-      { property: "og:description", content: "Lovable Generated Project" },
+      { title: "VectorTrace · Hantavirus Surveillance" },
+      { name: "description", content: "Real-time hantavirus epidemiological tracking and geospatial surveillance." },
+      { name: "author", content: "VectorTrace" },
+      { property: "og:title", content: "VectorTrace · Hantavirus Surveillance" },
+      { property: "og:description", content: "Real-time hantavirus epidemiological tracking and geospatial surveillance." },
       { property: "og:type", content: "website" },
       { name: "twitter:card", content: "summary" },
-      { name: "twitter:site", content: "@Lovable" },
+      { name: "twitter:site", content: "@VectorTrace" },
     ],
     links: [
       {
@@ -113,7 +114,7 @@ function RootComponent() {
 
   return (
     <QueryClientProvider client={queryClient}>
-      <Outlet />
+      <AppLayout />
     </QueryClientProvider>
   );
 }
