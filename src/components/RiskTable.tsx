@@ -7,19 +7,25 @@ import { cn } from "@/lib/utils";
 export function RiskTable() {
   const { data: CASES } = useCases();
   const rows = useMemo(() => {
-    return REGIONS.map(r => {
-      const cases = CASES.filter(c => c.region === r.name);
-      const conf = cases.filter(c => c.status === "Confirmed").length;
+    return REGIONS.map((r) => {
+      const cases = CASES.filter((c) => c.region === r.name);
+      const conf = cases.filter((c) => c.status === "Confirmed").length;
       const rate = (cases.length / r.pop) * 100000;
-      return { region: r.name, total: cases.length, confirmed: conf, rate: +rate.toFixed(2), pop: r.pop };
+      return {
+        region: r.name,
+        total: cases.length,
+        confirmed: conf,
+        rate: +rate.toFixed(2),
+        pop: r.pop,
+      };
     }).sort((a, b) => b.rate - a.rate);
   }, [CASES]);
 
   const max = rows[0]?.rate || 1;
 
   return (
-    <div className="overflow-hidden rounded-md border border-border">
-      <table className="w-full text-[12.5px]">
+    <div className="overflow-x-auto rounded-md border border-border">
+      <table className="w-full min-w-[560px] text-[12.5px]">
         <thead className="bg-muted/60 text-[11px] uppercase tracking-wider text-muted-foreground">
           <tr>
             <th className="text-left px-4 py-2.5 font-semibold">Region</th>
@@ -36,16 +42,21 @@ export function RiskTable() {
             return (
               <tr key={r.region} className="border-t border-border hover:bg-muted/40">
                 <td className="px-4 py-2.5 font-medium flex items-center gap-2">
-                  {hot && <TrendingUp className="size-3.5 text-alert" />}
+                  {hot && <TrendingUp className="size-3.5 text-alert shrink-0" />}
                   {r.region}
                 </td>
-                <td className="px-4 py-2.5 text-right tabular-nums text-muted-foreground">{r.pop.toLocaleString()}</td>
+                <td className="px-4 py-2.5 text-right tabular-nums text-muted-foreground">
+                  {r.pop.toLocaleString()}
+                </td>
                 <td className="px-4 py-2.5 text-right tabular-nums">{r.total}</td>
                 <td className="px-4 py-2.5 text-right tabular-nums">{r.confirmed}</td>
                 <td className="px-4 py-2.5">
                   <div className="flex items-center gap-2">
                     <div className="flex-1 h-1.5 bg-muted rounded-full overflow-hidden">
-                      <div className={cn("h-full rounded-full", hot ? "bg-alert" : "bg-teal")} style={{ width: `${pct}%` }} />
+                      <div
+                        className={cn("h-full rounded-full", hot ? "bg-alert" : "bg-teal")}
+                        style={{ width: `${pct}%` }}
+                      />
                     </div>
                     <span className="tabular-nums font-semibold w-12 text-right">{r.rate}</span>
                   </div>

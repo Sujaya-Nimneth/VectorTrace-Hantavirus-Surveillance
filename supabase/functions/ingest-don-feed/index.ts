@@ -86,7 +86,7 @@ Deno.serve(async (req) => {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
-        "Authorization": `Bearer ${firecrawlKey}`,
+        Authorization: `Bearer ${firecrawlKey}`,
       },
       body: JSON.stringify({
         url: SOURCE_URL,
@@ -102,14 +102,32 @@ Deno.serve(async (req) => {
                   items: {
                     type: "object",
                     properties: {
-                      case_id: { type: "string", description: "A unique identifier for the DON item, e.g. slug or URL path segment" },
+                      case_id: {
+                        type: "string",
+                        description:
+                          "A unique identifier for the DON item, e.g. slug or URL path segment",
+                      },
                       region: { type: "string", description: "Country or region name" },
                       lat: { type: "number", description: "Approximate latitude of the region" },
                       lng: { type: "number", description: "Approximate longitude of the region" },
-                      reported_at: { type: "string", description: "Date of the report in ISO 8601 format" },
-                      syndrome: { type: "string", enum: ["HPS", "HFRS"], description: "Hantavirus syndrome type" },
-                      status: { type: "string", enum: ["Confirmed", "Suspected", "Pending"], description: "Case status" },
-                      summary: { type: "string", description: "Brief summary of the outbreak news item" },
+                      reported_at: {
+                        type: "string",
+                        description: "Date of the report in ISO 8601 format",
+                      },
+                      syndrome: {
+                        type: "string",
+                        enum: ["HPS", "HFRS"],
+                        description: "Hantavirus syndrome type",
+                      },
+                      status: {
+                        type: "string",
+                        enum: ["Confirmed", "Suspected", "Pending"],
+                        description: "Case status",
+                      },
+                      summary: {
+                        type: "string",
+                        description: "Brief summary of the outbreak news item",
+                      },
                     },
                     required: ["case_id", "region", "reported_at"],
                   },
@@ -131,21 +149,41 @@ Deno.serve(async (req) => {
 
     const scrapeResult = await scrape.json();
 
+    type RawDonItem = {
+      case_id?: string;
+      external_id?: string;
+      region?: string;
+      lat?: number;
+      lng?: number;
+      reported_at?: string;
+      syndrome?: "HPS" | "HFRS";
+      status?: "Confirmed" | "Suspected" | "Pending";
+      summary?: string;
+    };
+
     // Firecrawl returns { success, data: { json: { ... }, markdown, ... } }
     const jsonData = scrapeResult?.data?.json ?? scrapeResult?.data ?? {};
-    const rawItems: any[] = Array.isArray(jsonData)
-      ? jsonData
-      : jsonData?.items ?? [];
+    const rawItems: RawDonItem[] = Array.isArray(jsonData) ? jsonData : (jsonData?.items ?? []);
 
     // Filter for hantavirus-related items only
-    const hantaKeywords = ["hantavirus", "hanta", "hps", "hfrs", "hemorrhagic fever with renal syndrome", "hantavirus pulmonary syndrome"];
+    const hantaKeywords = [
+      "hantavirus",
+      "hanta",
+      "hps",
+      "hfrs",
+      "hemorrhagic fever with renal syndrome",
+      "hantavirus pulmonary syndrome",
+    ];
     const items = rawItems.filter((it) => {
       const text = JSON.stringify(it).toLowerCase();
       return hantaKeywords.some((kw) => text.includes(kw));
     });
 
     const cases = items.map((it) => ({
-      case_id: it.case_id ?? it.external_id ?? `don-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+      case_id:
+        it.case_id ??
+        it.external_id ??
+        `don-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
       region: it.region ?? "Unknown",
       lat: it.lat ?? 0,
       lng: it.lng ?? 0,

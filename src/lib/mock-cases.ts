@@ -2,12 +2,16 @@ import type { Case, RodentSite, Alert } from "./mock-data";
 import { REGIONS } from "./mock-data";
 
 let __s = 7;
-function r() { __s = (__s * 9301 + 49297) % 233280; return __s / 233280; }
+function r() {
+  __s = (__s * 9301 + 49297) % 233280;
+  return __s / 233280;
+}
 
 export const CASES: Case[] = Array.from({ length: 96 }, (_, i) => {
   const reg = REGIONS[Math.floor(r() * REGIONS.length)];
   const daysAgo = Math.floor(r() * 90);
-  const d = new Date(); d.setDate(d.getDate() - daysAgo);
+  const d = new Date();
+  d.setDate(d.getDate() - daysAgo);
   const stat = r();
   return {
     id: `HCV-${(2025001 + i).toString()}`,
