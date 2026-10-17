@@ -1,6 +1,7 @@
 import { createFileRoute, useNavigate, Link } from "@tanstack/react-router";
 import { useEffect, useState, type FormEvent } from "react";
 import { Activity, Loader2 } from "lucide-react";
+import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/use-auth";
 
@@ -18,24 +19,30 @@ function LoginPage() {
   const [err, setErr] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
 
-  useEffect(() => { if (user) navigate({ to: "/" }); }, [user, navigate]);
+  useEffect(() => {
+    if (user) navigate({ to: "/" });
+  }, [user, navigate]);
 
   const submit = async (e: FormEvent) => {
     e.preventDefault();
-    setErr(null); setBusy(true);
+    setErr(null);
+    setBusy(true);
     try {
       if (mode === "signup") {
         const { error } = await supabase.auth.signUp({
-          email, password,
+          email,
+          password,
           options: { emailRedirectTo: window.location.origin },
         });
         if (error) throw error;
+        toast.success("Account created! Check your email if confirmation is required.");
       } else {
         const { error } = await supabase.auth.signInWithPassword({ email, password });
         if (error) throw error;
       }
-    } catch (e: any) {
-      setErr(e.message ?? "Authentication failed");
+    } catch (e: unknown) {
+      const message = e instanceof Error ? e.message : "Authentication failed";
+      setErr(message);
     } finally {
       setBusy(false);
     }
@@ -50,7 +57,9 @@ function LoginPage() {
           </div>
           <div>
             <div className="font-bold tracking-tight text-[16px] leading-none">VectorTrace</div>
-            <div className="text-[10px] uppercase tracking-[0.18em] text-muted-foreground mt-1">Hanta Surveillance</div>
+            <div className="text-[10px] uppercase tracking-[0.18em] text-muted-foreground mt-1">
+              Hanta Surveillance
+            </div>
           </div>
         </Link>
 
@@ -65,26 +74,50 @@ function LoginPage() {
           <form onSubmit={submit} className="mt-5 space-y-3">
             <div>
               <label className="block text-[12px] font-semibold mb-1.5">Email</label>
-              <input type="email" required value={email} onChange={e => setEmail(e.target.value)}
-                className="w-full h-10 px-3 rounded-md border border-input bg-background text-[13px] focus:outline-none focus:ring-2 focus:ring-ring" />
+              <input
+                type="email"
+                required
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
+                className="w-full h-10 px-3 rounded-md border border-input bg-background text-[13px] focus:outline-none focus:ring-2 focus:ring-ring"
+              />
             </div>
             <div>
               <label className="block text-[12px] font-semibold mb-1.5">Password</label>
-              <input type="password" required minLength={6} value={password} onChange={e => setPassword(e.target.value)}
-                className="w-full h-10 px-3 rounded-md border border-input bg-background text-[13px] focus:outline-none focus:ring-2 focus:ring-ring" />
+              <input
+                type="password"
+                required
+                minLength={6}
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                className="w-full h-10 px-3 rounded-md border border-input bg-background text-[13px] focus:outline-none focus:ring-2 focus:ring-ring"
+              />
             </div>
 
-            {err && <div className="text-[12px] text-alert bg-alert/10 border border-alert/30 rounded-md px-3 py-2">{err}</div>}
+            {err && (
+              <div className="text-[12px] text-alert bg-alert/10 border border-alert/30 rounded-md px-3 py-2">
+                {err}
+              </div>
+            )}
 
-            <button type="submit" disabled={busy}
-              className="w-full h-10 rounded-md bg-primary text-primary-foreground text-[13px] font-semibold inline-flex items-center justify-center gap-2 hover:bg-primary/90 disabled:opacity-60">
+            <button
+              type="submit"
+              disabled={busy}
+              className="w-full h-10 rounded-md bg-primary text-primary-foreground text-[13px] font-semibold inline-flex items-center justify-center gap-2 hover:bg-primary/90 disabled:opacity-60"
+            >
               {busy && <Loader2 className="size-4 animate-spin" />}
               {mode === "signin" ? "Sign in" : "Create account"}
             </button>
           </form>
 
-          <button onClick={() => { setMode(m => m === "signin" ? "signup" : "signin"); setErr(null); }}
-            className="mt-4 w-full text-[12px] text-muted-foreground hover:text-foreground">
+          <button
+            type="button"
+            onClick={() => {
+              setMode((m) => (m === "signin" ? "signup" : "signin"));
+              setErr(null);
+            }}
+            className="mt-4 w-full text-[12px] text-muted-foreground hover:text-foreground"
+          >
             {mode === "signin" ? "No account? Request access" : "Already registered? Sign in"}
           </button>
         </div>

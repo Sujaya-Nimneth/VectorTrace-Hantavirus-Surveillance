@@ -1,15 +1,29 @@
 export type Case = {
-  id: string; region: string; lat: number; lng: number;
-  date: string; syndrome: "HPS" | "HFRS";
-  status: "Confirmed" | "Suspected" | "Pending"; age: number; sex: "M" | "F";
+  id: string;
+  region: string;
+  lat: number;
+  lng: number;
+  date: string;
+  syndrome: "HPS" | "HFRS";
+  status: "Confirmed" | "Suspected" | "Pending";
+  age: number;
+  sex: "M" | "F";
 };
 export type RodentSite = {
-  id: string; region: string; lat: number; lng: number;
-  date: string; positivity: number; species: string;
+  id: string;
+  region: string;
+  lat: number;
+  lng: number;
+  date: string;
+  positivity: number;
+  species: string;
 };
 export type Alert = {
-  id: string; ts: string; level: "critical" | "warning" | "info";
-  title: string; region: string;
+  id: string;
+  ts: string;
+  level: "critical" | "warning" | "info";
+  title: string;
+  region: string;
 };
 
 export const REGIONS = [

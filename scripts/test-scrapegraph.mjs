@@ -7,7 +7,8 @@ if (!API_KEY) {
 
 const body = {
   website_url: "https://www.who.int/emergencies/disease-outbreak-news",
-  user_prompt: "Return a JSON array of the latest 3 Disease Outbreak News items with title and date.",
+  user_prompt:
+    "Return a JSON array of the latest 3 Disease Outbreak News items with title and date.",
 };
 
 const res = await fetch("https://api.scrapegraphai.com/v1/smartscraper", {

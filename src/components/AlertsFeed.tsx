@@ -4,24 +4,44 @@ import { cn } from "@/lib/utils";
 
 const cfg = {
   critical: { icon: AlertTriangle, color: "text-alert", bg: "bg-alert/10", ring: "ring-alert/30" },
-  warning: { icon: AlertCircle, color: "text-warning", bg: "bg-warning/10", ring: "ring-warning/30" },
+  warning: {
+    icon: AlertCircle,
+    color: "text-warning",
+    bg: "bg-warning/10",
+    ring: "ring-warning/30",
+  },
   info: { icon: Info, color: "text-info", bg: "bg-info/10", ring: "ring-info/30" },
 };
 
 export function AlertsFeed() {
-  const alerts = useAlerts();
-  if (!alerts.length) return (
-    <div className="h-32 grid place-items-center text-muted-foreground text-[12px]">
-      <Loader2 className="size-4 animate-spin" />
-    </div>
-  );
+  const { data: alerts, loading } = useAlerts();
+
+  if (loading && !alerts.length) {
+    return (
+      <div className="h-32 grid place-items-center text-muted-foreground text-[12px]">
+        <Loader2 className="size-4 animate-spin" />
+      </div>
+    );
+  }
+
+  if (!alerts.length) {
+    return (
+      <div className="h-32 grid place-items-center text-muted-foreground text-[12px]">
+        No active alerts reported.
+      </div>
+    );
+  }
+
   return (
     <div className="space-y-2 max-h-[280px] overflow-y-auto pr-1 -mr-1">
-      {alerts.map(a => {
+      {alerts.map((a) => {
         const c = cfg[a.level];
         const I = c.icon;
         return (
-          <div key={a.id} className={cn("flex gap-2.5 p-2.5 rounded-md ring-1 ring-inset", c.bg, c.ring)}>
+          <div
+            key={a.id}
+            className={cn("flex gap-2.5 p-2.5 rounded-md ring-1 ring-inset", c.bg, c.ring)}
+          >
             <div className={cn("size-7 shrink-0 rounded grid place-items-center bg-card", c.color)}>
               <I className="size-3.5" />
             </div>

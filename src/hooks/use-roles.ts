@@ -1,30 +1,30 @@
-import { useEffect, useState } from "react";
+import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/use-auth";
 
-type Role = "admin" | "epidemiologist" | "viewer";
+export type Role = "admin" | "epidemiologist" | "viewer";
 
 export function useRoles() {
   const { user, loading: authLoading } = useAuth();
-  const [roles, setRoles] = useState<Role[]>([]);
-  const [loading, setLoading] = useState(true);
 
-  useEffect(() => {
-    if (authLoading) return;
-    if (!user) { setRoles([]); setLoading(false); return; }
-    let cancelled = false;
-    setLoading(true);
-    supabase.from("user_roles").select("role").eq("user_id", user.id)
-      .then(({ data }) => {
-        if (cancelled) return;
-        setRoles((data ?? []).map(r => r.role as Role));
-        setLoading(false);
-      });
-    return () => { cancelled = true; };
-  }, [user, authLoading]);
+  const { data: roles = [], isLoading } = useQuery({
+    queryKey: ["user_roles", user?.id],
+    enabled: !authLoading && !!user,
+    queryFn: async (): Promise<Role[]> => {
+      if (!user) return [];
+      const { data, error } = await supabase
+        .from("user_roles")
+        .select("role")
+        .eq("user_id", user.id);
+      if (error || !data) return [];
+      return data.map((r) => r.role as Role);
+    },
+    staleTime: 5 * 60_000,
+  });
 
   return {
-    roles, loading,
+    roles,
+    loading: authLoading || (!!user && isLoading),
     isAdmin: roles.includes("admin"),
     isClinician: roles.includes("admin") || roles.includes("epidemiologist"),
   };

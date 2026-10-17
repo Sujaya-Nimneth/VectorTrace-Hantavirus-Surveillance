@@ -1,12 +1,12 @@
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import {
-  Outlet,
   Link,
   createRootRouteWithContext,
   useRouter,
   HeadContent,
   Scripts,
 } from "@tanstack/react-router";
+import { Toaster } from "sonner";
 
 import appCss from "../styles.css?url";
 import { AppLayout } from "@/components/AppLayout";
@@ -75,15 +75,34 @@ export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()(
       { charSet: "utf-8" },
       { name: "viewport", content: "width=device-width, initial-scale=1" },
       { title: "VectorTrace · Hantavirus Surveillance" },
-      { name: "description", content: "Real-time hantavirus epidemiological tracking and geospatial surveillance." },
+      {
+        name: "description",
+        content: "Real-time hantavirus epidemiological tracking and geospatial surveillance.",
+      },
       { name: "author", content: "VectorTrace" },
       { property: "og:title", content: "VectorTrace · Hantavirus Surveillance" },
-      { property: "og:description", content: "Real-time hantavirus epidemiological tracking and geospatial surveillance." },
+      {
+        property: "og:description",
+        content: "Real-time hantavirus epidemiological tracking and geospatial surveillance.",
+      },
       { property: "og:type", content: "website" },
       { name: "twitter:card", content: "summary" },
       { name: "twitter:site", content: "@VectorTrace" },
     ],
     links: [
+      {
+        rel: "preconnect",
+        href: "https://fonts.googleapis.com",
+      },
+      {
+        rel: "preconnect",
+        href: "https://fonts.gstatic.com",
+        crossOrigin: "anonymous",
+      },
+      {
+        rel: "stylesheet",
+        href: "https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600&display=swap",
+      },
       {
         rel: "stylesheet",
         href: appCss,
@@ -117,6 +136,7 @@ function RootComponent() {
     <QueryClientProvider client={queryClient}>
       <AuthProvider>
         <AppLayout />
+        <Toaster position="bottom-right" richColors closeButton />
       </AuthProvider>
     </QueryClientProvider>
   );
