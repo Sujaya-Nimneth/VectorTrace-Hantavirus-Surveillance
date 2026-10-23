@@ -1,0 +1,22 @@
+# Never bake secrets or local state into images
+.env
+.env.*
+!.env.example
+
+# VCS and local state
+.git
+.gitignore
+.github
+.DS_Store
+
+# Build artifacts and caches
+node_modules
+dist
+.wrangler
+.tanstack
+*.log
+
+# Local tooling state
+supabase/.temp
+.vscode
+.idea

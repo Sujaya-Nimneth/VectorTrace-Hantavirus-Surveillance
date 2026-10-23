@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState, memo } from "react";
 import {
   MapContainer,
   TileLayer,
@@ -11,7 +11,8 @@ import {
 import L from "leaflet";
 import "leaflet.heat";
 import { useCases, useRodents } from "@/hooks/use-surveillance";
-import type { Case } from "@/lib/mock-data";
+import { useNow } from "@/hooks/use-now";
+import type { Case, RodentSite } from "@/lib/mock-data";
 import { Layers, Calendar, X, MapPin, AlertTriangle, Rat, Activity } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { MAP_FOCUS_EVENT, MAP_FOCUS_STORAGE_KEY, type MapFocusTarget } from "@/components/TopBar";
@@ -68,7 +69,7 @@ function HeatLayer({ points }: { points: [number, number, number][] }) {
 
 const rodentIcon = L.divIcon({
   className: "",
-  html: '<div style="width:0;height:0;border-left:8px solid transparent;border-right:8px solid transparent;border-bottom:14px solid oklch(0.55 0.22 295);filter:drop-shadow(0 0 4px oklch(0.55 0.22 295 / 0.6));"></div>',
+  html: `<div style="width:0;height:0;border-left:8px solid transparent;border-right:8px solid transparent;border-bottom:14px solid var(--map-rodent);filter:drop-shadow(0 0 4px color-mix(in oklch, var(--map-rodent) 60%, transparent));"></div>`,
   iconSize: [16, 14],
   iconAnchor: [8, 14],
 });
@@ -86,6 +87,13 @@ function MapController({
 }) {
   const map = useMap();
   const fittedRangeRef = useRef<number | null>(null);
+
+  // Refs so the focus listener below registers once instead of re-subscribing
+  // every time the cases array changes.
+  const casesRef = useRef(cases);
+  casesRef.current = cases;
+  const selectRef = useRef(onSelectCase);
+  selectRef.current = onSelectCase;
 
   useEffect(() => {
     if (points.length > 0 && fittedRangeRef.current !== range) {
@@ -105,8 +113,8 @@ function MapController({
           duration: 0.8,
         });
         if (target.type === "case") {
-          const found = cases.find((c) => c.id === target.id);
-          if (found) onSelectCase(found);
+          const found = casesRef.current.find((c) => c.id === target.id);
+          if (found) selectRef.current(found);
         }
       } catch {
         /* ignore */
@@ -131,7 +139,7 @@ function MapController({
 
     window.addEventListener(MAP_FOCUS_EVENT, onCustomFocus);
     return () => window.removeEventListener(MAP_FOCUS_EVENT, onCustomFocus);
-  }, [map, cases, onSelectCase]);
+  }, [map]);
 
   return null;
 }
@@ -142,22 +150,66 @@ const RANGES = [
   { label: "90D", days: 90 },
 ];
 
+// Memoized per-marker components: a realtime INSERT produces a new array but
+// reuses the existing item objects, so only the new marker renders.
+const CaseDot = memo(function CaseDot({
+  c,
+  pulse,
+  onSelect,
+}: {
+  c: Case;
+  pulse: boolean;
+  onSelect: (c: Case) => void;
+}) {
+  return (
+    <CircleMarker
+      center={[c.lat, c.lng]}
+      radius={6}
+      pathOptions={{
+        color: "oklch(0.98 0 0)",
+        weight: 1.5,
+        fillColor: c.status === "Confirmed" ? "oklch(0.58 0.24 25)" : "oklch(0.7 0.18 50)",
+        fillOpacity: 0.85,
+        className: pulse ? "pulse-marker" : undefined,
+      }}
+      eventHandlers={{ click: () => onSelect(c) }}
+    >
+      <Tooltip>
+        {c.id} · {c.region}
+      </Tooltip>
+    </CircleMarker>
+  );
+});
+
+const RodentPin = memo(function RodentPin({ r }: { r: RodentSite }) {
+  return (
+    <Marker position={[r.lat, r.lng]} icon={rodentIcon}>
+      <Popup>
+        <div className="text-[12px]">
+          <div className="font-semibold">{r.id}</div>
+          <div>{r.species}</div>
+          <div className="text-warning">Positivity: {r.positivity}%</div>
+        </div>
+      </Popup>
+    </Marker>
+  );
+});
+
 export default function MapView() {
   const [layers, setLayers] = useState({ cases: true, rodents: true, density: true });
   const [range, setRange] = useState(30);
   const [selected, setSelected] = useState<Case | null>(null);
   const { data: CASES } = useCases();
-  const RODENTS = useRodents();
+  const { data: RODENTS } = useRodents();
+  const now = useNow();
 
   const visibleCases = useMemo(() => {
-    const now = Date.now();
     return CASES.filter((c) => (now - +new Date(c.date)) / 86400000 <= range);
-  }, [range, CASES]);
+  }, [range, CASES, now]);
 
   const visibleRodents = useMemo(() => {
-    const now = Date.now();
     return RODENTS.filter((r) => (now - +new Date(r.date)) / 86400000 <= range);
-  }, [range, RODENTS]);
+  }, [range, RODENTS, now]);
 
   const points: [number, number][] = useMemo(
     () => [...visibleCases, ...visibleRodents].map((p) => [p.lat, p.lng]),
@@ -177,14 +229,23 @@ export default function MapView() {
     });
   }, [selected, RODENTS]);
 
+  // Escape closes the case detail drawer.
+  useEffect(() => {
+    if (!selected) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") setSelected(null);
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [selected]);
+
   return (
-    <div className="relative h-full w-full bg-[#0b1220]">
+    <div className="relative h-full w-full bg-map-canvas">
       <MapContainer
         center={[-34, -64]}
         zoom={4}
         className="h-full w-full z-0"
-        style={{ background: "#0b1220" }}
-        zoomControl={false}
+        style={{ background: "var(--map-canvas)" }}
       >
         <TileLayer
           attribution="&copy; OpenStreetMap, &copy; CARTO"
@@ -193,48 +254,21 @@ export default function MapView() {
         <MapController points={points} range={range} cases={CASES} onSelectCase={setSelected} />
         {layers.density && heatPoints.length > 0 && <HeatLayer points={heatPoints} />}
         {layers.cases &&
-          visibleCases.map((c) => (
-            <CircleMarker
-              key={c.id}
-              center={[c.lat, c.lng]}
-              radius={6}
-              pathOptions={{
-                color: "oklch(0.98 0 0)",
-                weight: 1.5,
-                fillColor: c.status === "Confirmed" ? "oklch(0.58 0.24 25)" : "oklch(0.7 0.18 50)",
-                fillOpacity: 0.85,
-                className: "pulse-marker",
-              }}
-              eventHandlers={{ click: () => setSelected(c) }}
-            >
-              <Tooltip>
-                {c.id} · {c.region}
-              </Tooltip>
-            </CircleMarker>
+          visibleCases.map((c, i) => (
+            <CaseDot key={c.id} c={c} pulse={i < 25} onSelect={setSelected} />
           ))}
-        {layers.rodents &&
-          visibleRodents.map((r) => (
-            <Marker key={r.id} position={[r.lat, r.lng]} icon={rodentIcon}>
-              <Popup>
-                <div className="text-[12px]">
-                  <div className="font-semibold">{r.id}</div>
-                  <div>{r.species}</div>
-                  <div className="text-orange-400">Positivity: {r.positivity}%</div>
-                </div>
-              </Popup>
-            </Marker>
-          ))}
+        {layers.rodents && visibleRodents.map((r) => <RodentPin key={r.id} r={r} />)}
       </MapContainer>
 
       {/* Layer switcher */}
-      <div className="absolute top-4 right-4 z-[400] bg-[#0f1a2e]/95 backdrop-blur border border-white/10 rounded-lg p-3 shadow-xl text-white w-52 sm:w-56">
+      <div className="absolute top-4 right-4 z-[400] bg-map-panel/95 backdrop-blur border border-white/10 rounded-lg p-3 shadow-xl text-white w-52 sm:w-56">
         <div className="flex items-center gap-2 text-[11px] uppercase tracking-wider text-white/60 mb-2.5">
           <Layers className="size-3.5" /> Data Layers
         </div>
         {(
           [
             { k: "cases", label: "Human Cases", color: "bg-alert", icon: AlertTriangle },
-            { k: "rodents", label: "Rodent Vectors", color: "bg-purple-500", icon: Rat },
+            { k: "rodents", label: "Rodent Vectors", color: "bg-map-rodent", icon: Rat },
             { k: "density", label: "Risk Density", color: "bg-warning", icon: Activity },
           ] as const
         ).map((l) => {
@@ -259,7 +293,7 @@ export default function MapView() {
       </div>
 
       {/* Time slider */}
-      <div className="absolute bottom-4 sm:bottom-6 left-1/2 -translate-x-1/2 z-[400] max-w-[calc(100vw-2rem)] bg-[#0f1a2e]/95 backdrop-blur border border-white/10 rounded-lg px-3 sm:px-4 py-2.5 sm:py-3 shadow-xl text-white flex flex-wrap items-center justify-center gap-2 sm:gap-3">
+      <div className="absolute bottom-4 sm:bottom-6 left-1/2 -translate-x-1/2 z-[400] max-w-[calc(100vw-2rem)] bg-map-panel/95 backdrop-blur border border-white/10 rounded-lg px-3 sm:px-4 py-2.5 sm:py-3 shadow-xl text-white flex flex-wrap items-center justify-center gap-2 sm:gap-3">
         <div className="flex items-center gap-1.5">
           <Calendar className="size-4 text-teal" />
           <span className="text-[11px] uppercase tracking-wider text-white/60 hidden sm:inline">
@@ -271,6 +305,7 @@ export default function MapView() {
             <button
               key={r.days}
               type="button"
+              aria-pressed={range === r.days}
               onClick={() => setRange(r.days)}
               className={cn(
                 "px-2.5 sm:px-3 py-1 rounded text-[12px] font-semibold transition-colors",
@@ -315,14 +350,39 @@ export default function MapView() {
                 accent={selected.status === "Confirmed" ? "alert" : "warning"}
               />
               <Field label="Syndrome" value={selected.syndrome} />
-              <Field label="Age" value={selected.age ? `${selected.age}y` : "—"} />
-              <Field label="Sex" value={selected.sex} />
+              <Field label="Age" value={selected.age != null ? `${selected.age}y` : "—"} />
+              <Field label="Sex" value={selected.sex ?? "Unknown"} />
               <Field label="Reported" value={new Date(selected.date).toLocaleDateString()} />
               <Field
                 label="Coords"
                 value={`${selected.lat.toFixed(2)}, ${selected.lng.toFixed(2)}`}
               />
             </div>
+
+            {(selected.symptoms.length > 0 || selected.exposure) && (
+              <div className="rounded-md border border-border p-3">
+                <div className="text-[10px] uppercase tracking-wider text-muted-foreground mb-2">
+                  Clinical Notes
+                </div>
+                {selected.symptoms.length > 0 && (
+                  <div className="flex flex-wrap gap-1.5">
+                    {selected.symptoms.map((s) => (
+                      <span
+                        key={s}
+                        className="text-[11px] font-medium px-2 py-0.5 rounded-full bg-muted text-muted-foreground"
+                      >
+                        {s}
+                      </span>
+                    ))}
+                  </div>
+                )}
+                {selected.exposure && (
+                  <p className="text-[11.5px] text-muted-foreground mt-2 leading-snug">
+                    {selected.exposure}
+                  </p>
+                )}
+              </div>
+            )}
 
             {proxRodents.length > 0 ? (
               <div className="rounded-md border border-alert/30 bg-alert/10 p-3">
@@ -359,8 +419,8 @@ export default function MapView() {
           0%, 100% { fill-opacity: 0.85; }
           50% { fill-opacity: 0.4; }
         }
-        .leaflet-container { font-family: 'Inter', sans-serif; }
-        .leaflet-popup-content-wrapper, .leaflet-popup-tip { background: #0f1a2e; color: #fff; border: 1px solid rgba(255,255,255,0.1); }
+        .leaflet-container { font-family: 'Inter', sans-serif; background: var(--map-canvas); }
+        .leaflet-popup-content-wrapper, .leaflet-popup-tip { background: var(--map-panel); color: #fff; border: 1px solid rgba(255,255,255,0.1); }
       `}</style>
     </div>
   );

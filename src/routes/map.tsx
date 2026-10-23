@@ -12,7 +12,7 @@ export const Route = createFileRoute("/map")({
 
 function MapPage() {
   const fallback = (
-    <div className="h-full grid place-items-center bg-[#0b1220] text-white/60 text-sm">
+    <div className="h-full grid place-items-center bg-map-canvas text-white/60 text-sm">
       Loading geospatial layer…
     </div>
   );

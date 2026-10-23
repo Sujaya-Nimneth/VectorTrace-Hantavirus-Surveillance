@@ -1,4 +1,4 @@
-import { createFileRoute, useNavigate, Link } from "@tanstack/react-router";
+import { createFileRoute, useNavigate, useRouter, Link } from "@tanstack/react-router";
 import { useEffect, useState, type FormEvent } from "react";
 import { Activity, Loader2 } from "lucide-react";
 import { toast } from "sonner";
@@ -7,21 +7,32 @@ import { useAuth } from "@/hooks/use-auth";
 
 export const Route = createFileRoute("/login")({
   component: LoginPage,
+  validateSearch: (search: Record<string, unknown>): { redirect?: string } => ({
+    redirect: typeof search.redirect === "string" ? search.redirect : undefined,
+  }),
   head: () => ({ meta: [{ title: "Sign in · VectorTrace" }] }),
 });
 
 function LoginPage() {
   const { user } = useAuth();
   const navigate = useNavigate();
+  const router = useRouter();
+  const { redirect: redirectTo } = Route.useSearch();
   const [mode, setMode] = useState<"signin" | "signup">("signin");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [err, setErr] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
 
+  const safeRedirect =
+    redirectTo && redirectTo.startsWith("/") && !redirectTo.startsWith("//") ? redirectTo : "/";
+
   useEffect(() => {
-    if (user) navigate({ to: "/" });
-  }, [user, navigate]);
+    if (user) {
+      if (safeRedirect === "/") navigate({ to: "/" });
+      else router.history.push(safeRedirect);
+    }
+  }, [user, navigate, router, safeRedirect]);
 
   const submit = async (e: FormEvent) => {
     e.preventDefault();
@@ -73,9 +84,13 @@ function LoginPage() {
 
           <form onSubmit={submit} className="mt-5 space-y-3">
             <div>
-              <label className="block text-[12px] font-semibold mb-1.5">Email</label>
+              <label htmlFor="login-email" className="block text-[12px] font-semibold mb-1.5">
+                Email
+              </label>
               <input
+                id="login-email"
                 type="email"
+                autoComplete="email"
                 required
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
@@ -83,9 +98,13 @@ function LoginPage() {
               />
             </div>
             <div>
-              <label className="block text-[12px] font-semibold mb-1.5">Password</label>
+              <label htmlFor="login-password" className="block text-[12px] font-semibold mb-1.5">
+                Password
+              </label>
               <input
+                id="login-password"
                 type="password"
+                autoComplete={mode === "signup" ? "new-password" : "current-password"}
                 required
                 minLength={6}
                 value={password}

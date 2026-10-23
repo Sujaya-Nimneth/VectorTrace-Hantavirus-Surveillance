@@ -1,4 +1,4 @@
-import type { RodentSite, Alert } from "./mock-data";
+import type { RodentSite } from "./mock-data";
 import { REGIONS } from "./mock-data";
 
 let __s = 41;

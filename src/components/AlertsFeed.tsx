@@ -1,6 +1,10 @@
+import { useEffect, useReducer } from "react";
 import { useAlerts } from "@/hooks/use-surveillance";
-import { AlertTriangle, AlertCircle, Info, Loader2 } from "lucide-react";
+import { AlertTriangle, AlertCircle, Info } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { relativeTime } from "@/lib/time";
+import { QueryError } from "./QueryError";
+import { Skeleton } from "./Skeleton";
 
 const cfg = {
   critical: { icon: AlertTriangle, color: "text-alert", bg: "bg-alert/10", ring: "ring-alert/30" },
@@ -14,12 +18,24 @@ const cfg = {
 };
 
 export function AlertsFeed() {
-  const { data: alerts, loading } = useAlerts();
+  const { data: alerts, loading, error, refetch } = useAlerts();
+  // Re-render every 30s so relative timestamps stay current while mounted.
+  const [, tick] = useReducer((n: number) => n + 1, 0);
+  useEffect(() => {
+    const id = setInterval(tick, 30_000);
+    return () => clearInterval(id);
+  }, []);
 
-  if (loading && !alerts.length) {
+  if (error) {
+    return <QueryError what="alerts" error={error} onRetry={() => refetch()} />;
+  }
+
+  if (loading) {
     return (
-      <div className="h-32 grid place-items-center text-muted-foreground text-[12px]">
-        <Loader2 className="size-4 animate-spin" />
+      <div className="space-y-2" aria-label="Loading alerts">
+        {[0, 1, 2].map((i) => (
+          <Skeleton key={i} className="h-14 w-full rounded-md" />
+        ))}
       </div>
     );
   }
@@ -50,7 +66,7 @@ export function AlertsFeed() {
               <div className="text-[10.5px] text-muted-foreground mt-0.5 flex items-center gap-1.5">
                 <span>{a.region}</span>
                 <span className="size-0.5 rounded-full bg-muted-foreground/50" />
-                <span>{a.ts}</span>
+                <span>{relativeTime(a.createdAt)}</span>
               </div>
             </div>
           </div>

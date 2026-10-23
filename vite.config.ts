@@ -2,6 +2,7 @@ import { defineConfig, loadEnv, type PluginOption } from "vite";
 import react from "@vitejs/plugin-react";
 import tailwindcss from "@tailwindcss/vite";
 import tsConfigPaths from "vite-tsconfig-paths";
+import { cloudflare } from "@cloudflare/vite-plugin";
 import { tanstackStart } from "@tanstack/react-start/plugin/vite";
 
 export default defineConfig(({ command, mode }) => {
@@ -28,23 +29,29 @@ export default defineConfig(({ command, mode }) => {
     react(),
   ];
 
-  // Cloudflare plugin only in build mode (for Workers deployment)
+  // Cloudflare Workers is the deploy target — the plugin emits the worker
+  // bundle into dist/server during production builds.
   if (command === "build") {
-    try {
-      // Dynamic import — only required when deploying to Cloudflare
-      plugins.push(
-        import("@cloudflare/vite-plugin").then(({ cloudflare }) =>
-          cloudflare({ viteEnvironment: { name: "ssr" } }),
-        ),
-      );
-    } catch {
-      // @cloudflare/vite-plugin not installed — skip
-    }
+    plugins.push(cloudflare({ viteEnvironment: { name: "ssr" } }));
   }
 
   return {
     define: envDefine,
     plugins,
+    build: {
+      rollupOptions: {
+        output: {
+          manualChunks: {
+            "vendor-tanstack": [
+              "@tanstack/react-router",
+              "@tanstack/react-query",
+              "@tanstack/react-start",
+            ],
+            "vendor-supabase": ["@supabase/supabase-js"],
+          },
+        },
+      },
+    },
     resolve: {
       alias: { "@": `${process.cwd()}/src` },
       dedupe: [

@@ -6,10 +6,11 @@ VectorTrace is a real-time epidemiological dashboard for hantavirus surveillance
 
 - Executive dashboard with live metrics, epidemic curve, alerts, and risk ranking.
 - Geospatial map view for field intelligence and hotspot tracking.
-- Rapid case intake workflow for clinician submissions.
+- Rapid case intake workflow for clinician submissions (symptoms + exposure notes persisted).
 - Admin-only infrastructure console for health and observability signals.
 - Supabase Auth + RLS with explicit roles (admin, epidemiologist, viewer).
 - Public read access to surveillance data with authenticated writes.
+- Demo mode: with `VITE_DEMO_MODE=true` (or when Supabase credentials are unset) the app serves a bundled mock dataset and shows a "Demo data" badge, so the UI renders without a backend.
 
 ## App routes
 
@@ -63,8 +64,9 @@ Required variables:
 - `SUPABASE_URL`
 - `SUPABASE_PUBLISHABLE_KEY`
 - `SUPABASE_SERVICE_ROLE_KEY` (server-only)
-- `FIRECRAWL_API_KEY` (edge function only)
-- `INGEST_TOKEN` (optional, protects ingestion endpoints)
+- `FIRECRAWL_API_KEY` (edge function only, set via `supabase secrets set`)
+- `INGEST_TOKEN` (required on edge functions — they fail closed without it)
+- `VITE_DEMO_MODE` (optional, `true` forces the bundled demo dataset)
 - `INGEST_URL` (Docker scheduler: Supabase edge function URL)
 - `HEALTHCHECK_URL` (Docker scheduler: infra health-check URL)
 - `INGEST_INTERVAL_SECONDS` (optional, default 43200)
@@ -79,9 +81,17 @@ npm install
 npm run dev
 ```
 
+Quality checks:
+
+```bash
+npm run lint
+npm run typecheck
+npm test
+```
+
 ## Docker (IaC)
 
-Build and run everything with Docker Compose:
+Build and run the web app with Docker Compose:
 
 ```bash
 docker compose up --build
@@ -90,15 +100,19 @@ docker compose up --build
 Services:
 
 - `web`: Vite + TanStack Start app (served via Nginx).
-- `scraper`: lightweight scheduler that calls the ingest and health-check endpoints.
-- `db`: local Postgres for testing.
-- `nginx`: reverse proxy.
+- `nginx`: reverse proxy (gzip, asset caching, security headers).
 
-Set these in your `.env` for compose:
+The `scraper` scheduler is opt-in via a compose profile — pg_cron (configured by the migrations) is the default scheduler, and running both would duplicate ingest runs and metric rows:
+
+```bash
+docker compose --profile scheduler up
+```
+
+Set these in your `.env` for the scraper:
 
 - `INGEST_URL` = `https://<SUPABASE_PROJECT>.supabase.co/functions/v1/ingest-don-feed`
 - `HEALTHCHECK_URL` = `https://<SUPABASE_PROJECT>.supabase.co/functions/v1/infra-health-check`
-- `INGEST_TOKEN` if you enabled token auth on ingest endpoints.
+- `INGEST_TOKEN` matching the edge function secret.
 
 Build and preview:
 
@@ -133,14 +147,16 @@ npm run preview
 
 ## CI/CD
 
-GitHub Actions deploys on every push to `main` using Vercel.
+GitHub Actions runs lint, typecheck, tests, and a build on every pull request, and deploys to **Cloudflare Workers** on every push to `main` (`npx wrangler deploy` using the worker config emitted by `@cloudflare/vite-plugin` into `dist/server`).
+
 Configure the following repository secrets:
 
-- `VERCEL_TOKEN`
-- `VERCEL_ORG_ID`
-- `VERCEL_PROJECT_ID`
+- `CLOUDFLARE_API_TOKEN`
+- `CLOUDFLARE_ACCOUNT_ID`
 - `VITE_SUPABASE_URL`
 - `VITE_SUPABASE_PUBLISHABLE_KEY`
+
+Set the worker's server-side secrets with `npx wrangler secret put <NAME>` if you use them (e.g. `SUPABASE_URL`, `SUPABASE_PUBLISHABLE_KEY`).
 
 ## Roadmap
 

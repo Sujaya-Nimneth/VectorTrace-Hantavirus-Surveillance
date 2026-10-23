@@ -1,6 +1,7 @@
 import { useEffect } from "react";
 import { useQuery, useQueryClient, type QueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
+import { isDemoMode } from "@/lib/demo-mode";
 import type { Case, RodentSite, Alert } from "@/lib/mock-data";
 import { CASES as MOCK_CASES } from "@/lib/mock-cases";
 import { RODENTS as MOCK_RODENTS } from "@/lib/mock-rodents";
@@ -17,6 +18,8 @@ type DbCase = {
   status: "Confirmed" | "Suspected" | "Pending";
   age: number | null;
   sex: "M" | "F" | null;
+  symptoms: string[] | null;
+  exposure: string | null;
 };
 
 type DbRodent = {
@@ -46,8 +49,10 @@ const mapCase = (r: DbCase): Case => ({
   date: r.reported_at,
   syndrome: r.syndrome,
   status: r.status,
-  age: r.age ?? 0,
-  sex: r.sex ?? "M",
+  age: r.age ?? null,
+  sex: r.sex ?? null,
+  symptoms: r.symptoms ?? [],
+  exposure: r.exposure ?? null,
 });
 
 const mapRodent = (r: DbRodent): RodentSite => ({
@@ -60,26 +65,45 @@ const mapRodent = (r: DbRodent): RodentSite => ({
   species: r.species,
 });
 
-function relativeTime(iso: string) {
-  const diff = Math.max(0, (Date.now() - +new Date(iso)) / 1000);
-  if (diff < 60) return `${Math.floor(diff)}s ago`;
-  if (diff < 3600) return `${Math.floor(diff / 60)}m ago`;
-  if (diff < 86400) return `${Math.floor(diff / 3600)}h ago`;
-  return `${Math.floor(diff / 86400)}d ago`;
-}
-
 const mapAlert = (r: DbAlert): Alert => ({
   id: r.id,
-  ts: relativeTime(r.created_at),
+  createdAt: r.created_at,
   level: r.level,
   title: r.title,
   region: r.region,
 });
 
-function mergeById<T extends { id: string }>(live: T[], fallback: T[], minCount: number): T[] {
-  if (live.length >= minCount) return live;
-  const seen = new Set(live.map((item) => item.id));
-  return [...live, ...fallback.filter((item) => !seen.has(item.id))];
+async function fetchCases(): Promise<Case[]> {
+  if (isDemoMode()) return MOCK_CASES;
+  const { data: rows, error } = await supabase
+    .from("hanta_cases")
+    .select("*")
+    .order("reported_at", { ascending: false })
+    .limit(500);
+  if (error) throw new Error(`Failed to load cases: ${error.message}`);
+  return (rows as DbCase[]).map(mapCase);
+}
+
+async function fetchRodents(): Promise<RodentSite[]> {
+  if (isDemoMode()) return MOCK_RODENTS;
+  const { data: rows, error } = await supabase
+    .from("rodent_sites")
+    .select("*")
+    .order("sampled_at", { ascending: false })
+    .limit(500);
+  if (error) throw new Error(`Failed to load rodent sites: ${error.message}`);
+  return (rows as DbRodent[]).map(mapRodent);
+}
+
+async function fetchAlerts(): Promise<Alert[]> {
+  if (isDemoMode()) return MOCK_ALERTS;
+  const { data: rows, error } = await supabase
+    .from("hanta_alerts")
+    .select("*")
+    .order("created_at", { ascending: false })
+    .limit(20);
+  if (error) throw new Error(`Failed to load alerts: ${error.message}`);
+  return (rows as DbAlert[]).map(mapAlert);
 }
 
 // Track active realtime subscriptions per QueryClient so we only open 1 channel per table
@@ -104,19 +128,19 @@ function ensureRealtimeSubscription(
       .on("postgres_changes", { event: "*", schema: "public", table }, (payload) => {
         if (table === "hanta_cases" && payload.eventType === "INSERT") {
           const added = mapCase(payload.new as DbCase);
-          queryClient.setQueryData<Case[]>(["hanta_cases"], (prev = MOCK_CASES) => [
+          queryClient.setQueryData<Case[]>(["hanta_cases"], (prev = []) => [
             added,
             ...prev.filter((c) => c.id !== added.id),
           ]);
         } else if (table === "rodent_sites" && payload.eventType === "INSERT") {
           const added = mapRodent(payload.new as DbRodent);
-          queryClient.setQueryData<RodentSite[]>(["rodent_sites"], (prev = MOCK_RODENTS) => [
+          queryClient.setQueryData<RodentSite[]>(["rodent_sites"], (prev = []) => [
             added,
             ...prev.filter((r) => r.id !== added.id),
           ]);
         } else if (table === "hanta_alerts" && payload.eventType === "INSERT") {
           const added = mapAlert(payload.new as DbAlert);
-          queryClient.setQueryData<Alert[]>(["hanta_alerts"], (prev = MOCK_ALERTS) =>
+          queryClient.setQueryData<Alert[]>(["hanta_alerts"], (prev = []) =>
             [added, ...prev.filter((a) => a.id !== added.id)].slice(0, 20),
           );
         } else {
@@ -129,92 +153,46 @@ function ensureRealtimeSubscription(
   }
 }
 
-export function useCases() {
+function useRealtime(table: "hanta_cases" | "rodent_sites" | "hanta_alerts") {
   const queryClient = useQueryClient();
 
   useEffect(() => {
-    ensureRealtimeSubscription(queryClient, "hanta_cases");
-  }, [queryClient]);
+    if (!isDemoMode()) ensureRealtimeSubscription(queryClient, table);
+  }, [queryClient, table]);
+}
 
-  const { data = MOCK_CASES, isLoading } = useQuery({
+export function useCases() {
+  useRealtime("hanta_cases");
+
+  const { data, isPending, error, refetch } = useQuery({
     queryKey: ["hanta_cases"],
-    queryFn: async (): Promise<Case[]> => {
-      try {
-        const { data: rows, error } = await supabase
-          .from("hanta_cases")
-          .select("*")
-          .order("reported_at", { ascending: false })
-          .limit(500);
-        if (error || !rows) return MOCK_CASES;
-        const mapped = (rows as DbCase[]).map(mapCase);
-        return mergeById(mapped, MOCK_CASES, 25);
-      } catch {
-        return MOCK_CASES;
-      }
-    },
-    initialData: MOCK_CASES,
+    queryFn: fetchCases,
     staleTime: 60_000,
   });
 
-  return { data, loading: isLoading };
+  return { data: data ?? [], loading: isPending, error, refetch };
 }
 
 export function useRodents() {
-  const queryClient = useQueryClient();
+  useRealtime("rodent_sites");
 
-  useEffect(() => {
-    ensureRealtimeSubscription(queryClient, "rodent_sites");
-  }, [queryClient]);
-
-  const { data = MOCK_RODENTS } = useQuery({
+  const { data, isPending, error, refetch } = useQuery({
     queryKey: ["rodent_sites"],
-    queryFn: async (): Promise<RodentSite[]> => {
-      try {
-        const { data: rows, error } = await supabase
-          .from("rodent_sites")
-          .select("*")
-          .order("sampled_at", { ascending: false })
-          .limit(500);
-        if (error || !rows) return MOCK_RODENTS;
-        const mapped = (rows as DbRodent[]).map(mapRodent);
-        return mergeById(mapped, MOCK_RODENTS, 15);
-      } catch {
-        return MOCK_RODENTS;
-      }
-    },
-    initialData: MOCK_RODENTS,
+    queryFn: fetchRodents,
     staleTime: 60_000,
   });
 
-  return data;
+  return { data: data ?? [], loading: isPending, error, refetch };
 }
 
 export function useAlerts() {
-  const queryClient = useQueryClient();
+  useRealtime("hanta_alerts");
 
-  useEffect(() => {
-    ensureRealtimeSubscription(queryClient, "hanta_alerts");
-  }, [queryClient]);
-
-  const { data = MOCK_ALERTS, isLoading } = useQuery({
+  const { data, isPending, error, refetch } = useQuery({
     queryKey: ["hanta_alerts"],
-    queryFn: async (): Promise<Alert[]> => {
-      try {
-        const { data: rows, error } = await supabase
-          .from("hanta_alerts")
-          .select("*")
-          .order("created_at", { ascending: false })
-          .limit(20);
-        if (error || !rows) return MOCK_ALERTS;
-        const mapped = (rows as DbAlert[]).map(mapAlert);
-        return mergeById(mapped, MOCK_ALERTS, 4).slice(0, 20);
-      } catch {
-        return MOCK_ALERTS;
-      }
-    },
-    initialData: MOCK_ALERTS,
+    queryFn: fetchAlerts,
     staleTime: 60_000,
   });
 
-  return { data, loading: isLoading };
+  return { data: data ?? [], loading: isPending, error, refetch };
 }
