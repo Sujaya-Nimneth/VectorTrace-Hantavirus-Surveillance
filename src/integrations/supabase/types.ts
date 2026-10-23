@@ -37,6 +37,7 @@ export type Database = {
           age: number | null;
           case_id: string;
           created_at: string;
+          exposure: string | null;
           id: string;
           lat: number;
           lng: number;
@@ -45,11 +46,13 @@ export type Database = {
           sex: Database["public"]["Enums"]["case_sex"] | null;
           status: Database["public"]["Enums"]["case_status"];
           syndrome: Database["public"]["Enums"]["case_syndrome"];
+          symptoms: string[];
         };
         Insert: {
           age?: number | null;
           case_id: string;
           created_at?: string;
+          exposure?: string | null;
           id?: string;
           lat: number;
           lng: number;
@@ -58,11 +61,13 @@ export type Database = {
           sex?: Database["public"]["Enums"]["case_sex"] | null;
           status?: Database["public"]["Enums"]["case_status"];
           syndrome?: Database["public"]["Enums"]["case_syndrome"];
+          symptoms?: string[];
         };
         Update: {
           age?: number | null;
           case_id?: string;
           created_at?: string;
+          exposure?: string | null;
           id?: string;
           lat?: number;
           lng?: number;
@@ -71,6 +76,7 @@ export type Database = {
           sex?: Database["public"]["Enums"]["case_sex"] | null;
           status?: Database["public"]["Enums"]["case_status"];
           syndrome?: Database["public"]["Enums"]["case_syndrome"];
+          symptoms?: string[];
         };
         Relationships: [];
       };

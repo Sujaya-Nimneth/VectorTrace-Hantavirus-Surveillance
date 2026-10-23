@@ -1,5 +1,3 @@
-version: "3.9"
-
 services:
   web:
     build:
@@ -13,7 +11,11 @@ services:
     expose:
       - "8080"
 
+  # Opt-in Docker scheduler. pg_cron (see supabase migrations) is the default
+  # scheduler — enabling both duplicates ingest runs and metric rows.
+  # Start with: docker compose --profile scheduler up
   scraper:
+    profiles: ["scheduler"]
     build:
       context: .
       dockerfile: Dockerfile.scraper
@@ -24,17 +26,6 @@ services:
       INGEST_INTERVAL_SECONDS: ${INGEST_INTERVAL_SECONDS:-43200}
       HEALTHCHECK_INTERVAL_SECONDS: ${HEALTHCHECK_INTERVAL_SECONDS:-300}
 
-  db:
-    image: postgres:15
-    environment:
-      POSTGRES_DB: vectortrace
-      POSTGRES_USER: vectortrace
-      POSTGRES_PASSWORD: vectortrace
-    ports:
-      - "5432:5432"
-    volumes:
-      - db_data:/var/lib/postgresql/data
-
   nginx:
     image: nginx:alpine
     depends_on:
@@ -44,6 +35,3 @@ services:
     volumes:
       - ./infra/nginx.conf:/etc/nginx/nginx.conf:ro
       - ./infra/default.conf:/etc/nginx/conf.d/default.conf:ro
-
-volumes:
-  db_data:

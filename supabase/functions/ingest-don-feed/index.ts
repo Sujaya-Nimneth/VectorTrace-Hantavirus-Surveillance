@@ -2,51 +2,21 @@
  * Supabase Edge Function: ingest-don-feed
  * --------------------------------------
  * Pulls WHO Disease Outbreak News (DONs) using Firecrawl and writes
- * normalized rows into `hanta_cases` and `hanta_alerts`.
+ * normalized rows into `hanta_cases` and `hanta_alerts` (upsert on case_id),
+ * logging each run to `infra_ingest_runs`.
  *
- * Required tables (run as a migration in your Supabase project):
+ * Expected tables (see supabase/migrations): public.hanta_cases, public.hanta_alerts,
+ * public.infra_ingest_runs — all with RLS enabled.
  *
- *   create table public.hanta_cases (
- *     id uuid primary key default gen_random_uuid(),
- *     external_id text unique,
- *     region text not null,
- *     lat double precision,
- *     lng double precision,
- *     reported_at timestamptz not null,
- *     syndrome text check (syndrome in ('HPS','HFRS')),
- *     status text check (status in ('Confirmed','Suspected','Pending')),
- *     source text,
- *     raw jsonb,
- *     created_at timestamptz default now()
- *   );
- *   alter table public.hanta_cases enable row level security;
+ * Required secrets (set via Supabase Dashboard):
+ *   FIRECRAWL_API_KEY           – Firecrawl bearer token
+ *   INGEST_TOKEN                – bearer token that callers must present.
+ *                                 The endpoint fails CLOSED while unset.
+ *   SUPABASE_URL / SUPABASE_SERVICE_ROLE_KEY – auto-injected
  *
- *   create table public.hanta_alerts (
- *     id uuid primary key default gen_random_uuid(),
- *     level text check (level in ('critical','warning','info')),
- *     title text not null,
- *     region text,
- *     emitted_at timestamptz default now()
- *   );
- *   alter table public.hanta_alerts enable row level security;
- *
- * Required secrets (set via Supabase Dashboard or .env):
- *   FIRECRAWL_API_KEY          – Firecrawl bearer token
- *   SUPABASE_URL               – auto-injected
- *   SUPABASE_SERVICE_ROLE_KEY  – auto-injected
- * Optional:
- *   INGEST_TOKEN               – bearer token to protect the endpoint
- *
- * Schedule via pg_cron (twice daily, 02:00 and 14:00 UTC):
- *
- *   select cron.schedule(
- *     'sync_don_twice_daily',
- *     '0 2,14 * * *',
- *     $$ select net.http_post(
- *          url := 'https://<PROJECT_REF>.supabase.co/functions/v1/ingest-don-feed',
- *          headers := jsonb_build_object('Authorization', 'Bearer ' || current_setting('app.cron_token'))
- *        ); $$
- *   );
+ * Scheduling is configured by the infra_cron_schedule migration (pg_cron
+ * `ingest_don_twice_daily` at 02:00 and 14:00 UTC, reading its invocation URL
+ * and token from public.infra_config).
  */
 
 // deno-lint-ignore-file
@@ -58,17 +28,119 @@ const SOURCE_URL = "https://www.who.int/emergencies/disease-outbreak-news";
 const INGEST_SOURCE = "WHO Disease Outbreak News";
 const INGEST_TOKEN = Deno.env.get("INGEST_TOKEN");
 
+/** Constant-time bearer token check (compares SHA-256 digests). */
+async function tokensMatch(a: string, b: string): Promise<boolean> {
+  const enc = new TextEncoder();
+  const [da, db] = await Promise.all([
+    crypto.subtle.digest("SHA-256", enc.encode(a)),
+    crypto.subtle.digest("SHA-256", enc.encode(b)),
+  ]);
+  const va = new Uint8Array(da);
+  const vb = new Uint8Array(db);
+  let diff = 0;
+  for (let i = 0; i < va.length; i++) diff |= va[i] ^ vb[i];
+  return diff === 0;
+}
+
+async function authorize(req: Request): Promise<boolean> {
+  const expected = INGEST_TOKEN;
+  // Fail closed: without a configured token the endpoint stays locked so
+  // anonymous callers can't burn Firecrawl credits.
+  if (!expected) return false;
+  const auth = req.headers.get("authorization") ?? "";
+  const presented = auth.startsWith("Bearer ") ? auth.slice("Bearer ".length) : "";
+  if (!presented) return false;
+  return tokensMatch(presented, expected);
+}
+
+type RawDonItem = {
+  case_id?: string;
+  external_id?: string;
+  region?: string;
+  lat?: number;
+  lng?: number;
+  reported_at?: string;
+  syndrome?: "HPS" | "HFRS";
+  status?: "Confirmed" | "Suspected" | "Pending";
+  summary?: string;
+};
+
+type NormalizedCase = {
+  case_id: string;
+  region: string;
+  lat: number;
+  lng: number;
+  reported_at: string;
+  syndrome: "HPS" | "HFRS";
+  status: "Confirmed" | "Suspected" | "Pending";
+};
+
+/**
+ * Deterministic fallback id (FNV-1a) so re-ingesting the same DON item
+ * dedupes via the case_id unique constraint instead of inserting duplicates.
+ */
+function stableCaseId(seed: string): string {
+  let h = 0x811c9dc5;
+  for (let i = 0; i < seed.length; i++) {
+    h ^= seed.charCodeAt(i);
+    h = Math.imul(h, 0x01000193);
+  }
+  return `DON-${(h >>> 0).toString(36).toUpperCase().padStart(7, "0")}`;
+}
+
+function normalizeItem(
+  it: RawDonItem,
+): { ok: true; value: NormalizedCase } | { ok: false; reason: string } {
+  const region = typeof it.region === "string" && it.region.trim() ? it.region.trim() : "Unknown";
+
+  const lat = it.lat;
+  const lng = it.lng;
+  if (typeof lat !== "number" || !Number.isFinite(lat) || lat < -90 || lat > 90) {
+    return { ok: false, reason: `item for ${region}: missing or invalid lat` };
+  }
+  if (typeof lng !== "number" || !Number.isFinite(lng) || lng < -180 || lng > 180) {
+    return { ok: false, reason: `item for ${region}: missing or invalid lng` };
+  }
+
+  let reportedAt = new Date().toISOString();
+  if (it.reported_at != null) {
+    const d = new Date(it.reported_at);
+    if (Number.isNaN(d.getTime())) {
+      return { ok: false, reason: `item for ${region}: invalid reported_at "${it.reported_at}"` };
+    }
+    reportedAt = d.toISOString();
+  }
+
+  const syndrome = it.syndrome ?? "HPS";
+  const status = it.status ?? "Suspected";
+  if (syndrome !== "HPS" && syndrome !== "HFRS") {
+    return { ok: false, reason: `item for ${region}: invalid syndrome "${String(it.syndrome)}"` };
+  }
+  if (status !== "Confirmed" && status !== "Suspected" && status !== "Pending") {
+    return { ok: false, reason: `item for ${region}: invalid status "${String(it.status)}"` };
+  }
+
+  const caseId =
+    it.case_id?.trim() ||
+    it.external_id?.trim() ||
+    stableCaseId(`${region}|${reportedAt}|${it.summary ?? ""}`);
+
+  return {
+    ok: true,
+    value: { case_id: caseId, region, lat, lng, reported_at: reportedAt, syndrome, status },
+  };
+}
+
 Deno.serve(async (req) => {
   const startedAt = new Date();
   let ingestedCount = 0;
   let supabase: ReturnType<typeof createClient> | null = null;
   try {
-    if (INGEST_TOKEN) {
-      const auth = req.headers.get("authorization") ?? "";
-      const token = auth.startsWith("Bearer ") ? auth.slice("Bearer ".length) : "";
-      if (!token || token !== INGEST_TOKEN) {
-        return new Response("Unauthorized", { status: 401 });
-      }
+    if (!(await authorize(req))) {
+      return new Response(
+        INGEST_TOKEN ? "Unauthorized" : "Unauthorized: INGEST_TOKEN secret is not configured",
+        { status: 401 },
+      );
     }
 
     supabase = createClient(
@@ -149,18 +221,6 @@ Deno.serve(async (req) => {
 
     const scrapeResult = await scrape.json();
 
-    type RawDonItem = {
-      case_id?: string;
-      external_id?: string;
-      region?: string;
-      lat?: number;
-      lng?: number;
-      reported_at?: string;
-      syndrome?: "HPS" | "HFRS";
-      status?: "Confirmed" | "Suspected" | "Pending";
-      summary?: string;
-    };
-
     // Firecrawl returns { success, data: { json: { ... }, markdown, ... } }
     const jsonData = scrapeResult?.data?.json ?? scrapeResult?.data ?? {};
     const rawItems: RawDonItem[] = Array.isArray(jsonData) ? jsonData : (jsonData?.items ?? []);
@@ -179,21 +239,18 @@ Deno.serve(async (req) => {
       return hantaKeywords.some((kw) => text.includes(kw));
     });
 
-    const cases = items.map((it) => ({
-      case_id:
-        it.case_id ??
-        it.external_id ??
-        `don-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
-      region: it.region ?? "Unknown",
-      lat: it.lat ?? 0,
-      lng: it.lng ?? 0,
-      reported_at: it.reported_at ?? new Date().toISOString(),
-      syndrome: it.syndrome ?? "HPS",
-      status: it.status ?? "Suspected",
-    }));
+    // Validate and normalize; drop rows with unusable geo/dates instead of
+    // writing 0,0 coordinates or malformed timestamps into the registry.
+    const rejected: string[] = [];
+    const cases: NormalizedCase[] = [];
+    for (const it of items) {
+      const res = normalizeItem(it);
+      if (res.ok) cases.push(res.value);
+      else rejected.push(res.reason);
+    }
 
     if (cases.length === 0) {
-      // No hantavirus items found – log the run but don't error
+      // No usable hantavirus items – log the run but don't error
       try {
         await supabase.from("infra_ingest_runs").insert({
           source: INGEST_SOURCE,
@@ -201,7 +258,7 @@ Deno.serve(async (req) => {
           started_at: startedAt.toISOString(),
           finished_at: new Date().toISOString(),
           records_ingested: 0,
-          error_message: null,
+          error_message: rejected.length ? `rejected rows: ${rejected.join("; ")}` : null,
         });
       } catch (logError) {
         console.error("Failed to record ingest run", logError);
@@ -211,7 +268,8 @@ Deno.serve(async (req) => {
         ok: true,
         ingested: 0,
         alerts: 0,
-        note: `Scraped ${rawItems.length} DON items, none matched hantavirus keywords.`,
+        note: `Scraped ${rawItems.length} DON items, ${items.length} matched hantavirus keywords, 0 passed validation.`,
+        rejected,
       });
     }
 
@@ -231,7 +289,10 @@ Deno.serve(async (req) => {
         title: `New confirmed hantavirus case ingested from WHO DON`,
         region: c.region,
       }));
-    if (alerts.length) await supabase.from("hanta_alerts").insert(alerts);
+    if (alerts.length) {
+      const { error: alertError } = await supabase.from("hanta_alerts").insert(alerts);
+      if (alertError) console.error("Failed to insert alerts", alertError);
+    }
 
     try {
       await supabase.from("infra_ingest_runs").insert({
@@ -240,7 +301,7 @@ Deno.serve(async (req) => {
         started_at: startedAt.toISOString(),
         finished_at: new Date().toISOString(),
         records_ingested: ingestedCount,
-        error_message: null,
+        error_message: rejected.length ? `rejected rows: ${rejected.join("; ")}` : null,
       });
     } catch (logError) {
       console.error("Failed to record ingest run", logError);
@@ -250,6 +311,7 @@ Deno.serve(async (req) => {
       ok: true,
       ingested: ingestedCount,
       alerts: alerts.length,
+      rejected,
     });
   } catch (e) {
     console.error(e);

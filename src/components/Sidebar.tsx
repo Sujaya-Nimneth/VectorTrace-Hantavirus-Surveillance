@@ -2,6 +2,7 @@ import { Link, useRouterState } from "@tanstack/react-router";
 import { LayoutDashboard, Map, ClipboardPlus, ServerCog, Activity, X } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useCases, useRodents } from "@/hooks/use-surveillance";
+import { isDemoMode } from "@/lib/demo-mode";
 
 const nav = [
   { to: "/", label: "Executive Dashboard", icon: LayoutDashboard },
@@ -13,7 +14,8 @@ const nav = [
 export function Sidebar({ open = false, onClose }: { open?: boolean; onClose?: () => void }) {
   const path = useRouterState({ select: (s) => s.location.pathname });
   const { data: cases } = useCases();
-  const rodents = useRodents();
+  const { data: rodents } = useRodents();
+  const demo = isDemoMode();
 
   const content = (
     <>
@@ -66,9 +68,15 @@ export function Sidebar({ open = false, onClose }: { open?: boolean; onClose?: (
         })}
       </nav>
       <div className="m-3 p-3 rounded-md bg-sidebar-accent/40 border border-sidebar-border text-[11px] leading-snug">
-        <div className="flex items-center gap-1.5 text-success font-semibold mb-1">
-          <span className="size-1.5 rounded-full bg-success animate-pulse" /> Engine online
-        </div>
+        {demo ? (
+          <div className="flex items-center gap-1.5 text-warning font-semibold mb-1">
+            <span className="size-1.5 rounded-full bg-warning" /> Demo data
+          </div>
+        ) : (
+          <div className="flex items-center gap-1.5 text-success font-semibold mb-1">
+            <span className="size-1.5 rounded-full bg-success" /> Engine online
+          </div>
+        )}
         <div className="text-sidebar-foreground/60">
           {cases.length} cases · {rodents.length} vector sites
         </div>

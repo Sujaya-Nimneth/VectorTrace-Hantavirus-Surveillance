@@ -2,7 +2,6 @@
 @source "../src";
 @import "tw-animate-css";
 @import "leaflet/dist/leaflet.css";
-@custom-variant dark (&:is(.dark *));
 
 @theme inline {
   --font-sans: "Inter", system-ui, sans-serif;
@@ -48,6 +47,10 @@
   --color-terminal: var(--terminal);
   --color-terminal-dim: var(--terminal-dim);
   --color-terminal-bg: var(--terminal-bg);
+  --color-terminal-header: var(--terminal-header);
+  --color-map-canvas: var(--map-canvas);
+  --color-map-panel: var(--map-panel);
+  --color-map-rodent: var(--map-rodent);
   --color-chart-1: var(--chart-1);
   --color-chart-2: var(--chart-2);
   --color-chart-3: var(--chart-3);
@@ -94,6 +97,10 @@
   --terminal: oklch(0.78 0.2 145);
   --terminal-dim: oklch(0.68 0.16 145);
   --terminal-bg: oklch(0.14 0.02 240);
+  --terminal-header: oklch(0.18 0.02 240);
+  --map-canvas: oklch(0.17 0.04 264);
+  --map-panel: oklch(0.21 0.04 262);
+  --map-rodent: oklch(0.55 0.22 295);
   --chart-1: oklch(0.55 0.18 25);
   --chart-2: oklch(0.62 0.11 200);
   --chart-3: oklch(0.55 0.15 240);

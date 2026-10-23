@@ -1,1 +1,4 @@
-project_id = "fpxozhqigliwepunzkbu"
+# Linked Supabase project. This previously pointed at fpxozhqigliwepunzkbu
+# while the app and edge functions use the project below — keep them aligned
+# or `supabase deploy` / `db push` target the wrong project.
+project_id = "wsgbrwmgiyecsbpvpfd"

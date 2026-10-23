@@ -1,4 +1,4 @@
-import type { Case, RodentSite, Alert } from "./mock-data";
+import type { Case } from "./mock-data";
 import { REGIONS } from "./mock-data";
 
 let __s = 7;
@@ -23,5 +23,7 @@ export const CASES: Case[] = Array.from({ length: 96 }, (_, i) => {
     status: stat > 0.55 ? "Confirmed" : stat > 0.2 ? "Suspected" : "Pending",
     age: 18 + Math.floor(r() * 60),
     sex: r() > 0.5 ? "M" : "F",
+    symptoms: r() > 0.4 ? ["fever", "myalgia"] : ["fever"],
+    exposure: r() > 0.5 ? "Rural lodging with suspected rodent infestation" : null,
   };
 });

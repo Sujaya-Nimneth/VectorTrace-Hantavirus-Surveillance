@@ -17,6 +17,8 @@ import { useAuth } from "@/hooks/use-auth";
 import { useRoles } from "@/hooks/use-roles";
 import { useAlerts, useCases, useRodents } from "@/hooks/use-surveillance";
 import { REGIONS } from "@/lib/mock-data";
+import { isDemoMode } from "@/lib/demo-mode";
+import { relativeTime } from "@/lib/time";
 
 const labels: Record<string, string> = {
   "/": "Executive Dashboard",
@@ -39,9 +41,10 @@ export function TopBar({ onOpenMenu }: { onOpenMenu?: () => void }) {
   const { user, signOut } = useAuth();
   const { roles, isAdmin } = useRoles();
   const { data: cases } = useCases();
-  const rodents = useRodents();
+  const { data: rodents } = useRodents();
   const { data: alerts } = useAlerts();
   const navigate = useNavigate();
+  const demo = isDemoMode();
 
   const [userMenuOpen, setUserMenuOpen] = useState(false);
   const [alertsOpen, setAlertsOpen] = useState(false);
@@ -60,8 +63,18 @@ export function TopBar({ onOpenMenu }: { onOpenMenu?: () => void }) {
       if (alertsRef.current && !alertsRef.current.contains(target)) setAlertsOpen(false);
       if (searchRef.current && !searchRef.current.contains(target)) setSearchOpen(false);
     };
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key !== "Escape") return;
+      setUserMenuOpen(false);
+      setAlertsOpen(false);
+      setSearchOpen(false);
+    };
     document.addEventListener("mousedown", onClick);
-    return () => document.removeEventListener("mousedown", onClick);
+    document.addEventListener("keydown", onKey);
+    return () => {
+      document.removeEventListener("mousedown", onClick);
+      document.removeEventListener("keydown", onKey);
+    };
   }, []);
 
   const searchResults = useMemo(() => {
@@ -126,6 +139,14 @@ export function TopBar({ onOpenMenu }: { onOpenMenu?: () => void }) {
         <span>VectorTrace</span>
         <ChevronRight className="size-3.5" />
         <span className="text-foreground font-medium">{label}</span>
+        {demo && (
+          <span
+            title="Showing bundled demo data — Supabase is not configured or VITE_DEMO_MODE is enabled"
+            className="ml-1 rounded-full border border-warning/40 bg-warning/10 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider text-warning"
+          >
+            Demo data
+          </span>
+        )}
       </nav>
 
       <div ref={searchRef} className="flex-1 max-w-md mx-auto relative">
@@ -137,6 +158,24 @@ export function TopBar({ onOpenMenu }: { onOpenMenu?: () => void }) {
             setQuery(e.target.value);
             setSearchOpen(true);
           }}
+          onKeyDown={(e) => {
+            if (e.key === "Escape") {
+              if (query) setQuery("");
+              else setSearchOpen(false);
+              return;
+            }
+            if (e.key === "ArrowDown" || e.key === "Enter") {
+              const first = searchRef.current?.querySelector<HTMLElement>("[data-search-result]");
+              if (first) {
+                e.preventDefault();
+                first.focus();
+              }
+            }
+          }}
+          role="combobox"
+          aria-expanded={searchOpen && query.trim().length > 0}
+          aria-controls="topbar-search-results"
+          aria-autocomplete="list"
           placeholder="Search cases, regions, vectors…"
           className="w-full h-9 pl-9 pr-8 rounded-md bg-muted/60 border border-transparent focus:bg-card focus:border-ring focus:outline-none text-[13px] placeholder:text-muted-foreground"
         />
@@ -152,7 +191,26 @@ export function TopBar({ onOpenMenu }: { onOpenMenu?: () => void }) {
         )}
 
         {searchOpen && query.trim().length > 0 && (
-          <div className="absolute left-0 right-0 mt-1.5 bg-card border border-border rounded-lg shadow-xl p-2 z-50 max-h-80 overflow-y-auto text-[12px]">
+          <div
+            id="topbar-search-results"
+            role="listbox"
+            aria-label="Search results"
+            onKeyDown={(e) => {
+              if (e.key !== "ArrowDown" && e.key !== "ArrowUp") return;
+              e.preventDefault();
+              const items = Array.from(
+                searchRef.current?.querySelectorAll<HTMLElement>("[data-search-result]") ?? [],
+              );
+              if (items.length === 0) return;
+              const idx = items.indexOf(document.activeElement as HTMLElement);
+              const next =
+                e.key === "ArrowDown"
+                  ? (idx + 1) % items.length
+                  : (idx - 1 + items.length) % items.length;
+              items[next].focus();
+            }}
+            className="absolute left-0 right-0 mt-1.5 bg-card border border-border rounded-lg shadow-xl p-2 z-50 max-h-80 overflow-y-auto text-[12px]"
+          >
             {!hasResults ? (
               <div className="py-4 text-center text-muted-foreground">
                 No matching cases, regions, or vector sites.
@@ -168,6 +226,9 @@ export function TopBar({ onOpenMenu }: { onOpenMenu?: () => void }) {
                       <button
                         key={r.name}
                         type="button"
+                        role="option"
+                        aria-selected="false"
+                        data-search-result
                         onClick={() =>
                           focusOnMap({ type: "region", name: r.name, lat: r.lat, lng: r.lng })
                         }
@@ -192,6 +253,9 @@ export function TopBar({ onOpenMenu }: { onOpenMenu?: () => void }) {
                       <button
                         key={c.id}
                         type="button"
+                        role="option"
+                        aria-selected="false"
+                        data-search-result
                         onClick={() =>
                           focusOnMap({ type: "case", id: c.id, lat: c.lat, lng: c.lng })
                         }
@@ -215,6 +279,9 @@ export function TopBar({ onOpenMenu }: { onOpenMenu?: () => void }) {
                       <button
                         key={r.id}
                         type="button"
+                        role="option"
+                        aria-selected="false"
+                        data-search-result
                         onClick={() =>
                           focusOnMap({ type: "rodent", id: r.id, lat: r.lat, lng: r.lng })
                         }
@@ -244,6 +311,8 @@ export function TopBar({ onOpenMenu }: { onOpenMenu?: () => void }) {
             setUnreadAlerts(false);
           }}
           aria-label="View surveillance alerts"
+          aria-haspopup="dialog"
+          aria-expanded={alertsOpen}
           className="relative size-9 grid place-items-center rounded-md hover:bg-muted text-muted-foreground hover:text-foreground transition-colors"
         >
           <Bell className="size-4" />
@@ -264,7 +333,7 @@ export function TopBar({ onOpenMenu }: { onOpenMenu?: () => void }) {
                   <div className="font-medium leading-snug">{a.title}</div>
                   <div className="text-[10.5px] text-muted-foreground mt-0.5 flex items-center justify-between">
                     <span>{a.region}</span>
-                    <span>{a.ts}</span>
+                    <span>{relativeTime(a.createdAt)}</span>
                   </div>
                 </div>
               ))}
@@ -278,6 +347,8 @@ export function TopBar({ onOpenMenu }: { onOpenMenu?: () => void }) {
           <button
             type="button"
             onClick={() => setUserMenuOpen((o) => !o)}
+            aria-haspopup="menu"
+            aria-expanded={userMenuOpen}
             className="flex items-center gap-2.5 pl-1 pr-2 py-1 rounded-md hover:bg-muted transition-colors"
           >
             <div className="size-7 rounded-full bg-gradient-to-br from-primary to-teal text-white text-[11px] font-bold grid place-items-center">
@@ -292,9 +363,14 @@ export function TopBar({ onOpenMenu }: { onOpenMenu?: () => void }) {
             <ChevronDown className="size-3.5 text-muted-foreground" />
           </button>
           {userMenuOpen && (
-            <div className="absolute right-0 mt-1 w-48 bg-card border border-border rounded-md shadow-lg p-1 z-50">
+            <div
+              role="menu"
+              aria-label="User menu"
+              className="absolute right-0 mt-1 w-48 bg-card border border-border rounded-md shadow-lg p-1 z-50"
+            >
               <button
                 type="button"
+                role="menuitem"
                 onClick={async () => {
                   await signOut();
                   setUserMenuOpen(false);

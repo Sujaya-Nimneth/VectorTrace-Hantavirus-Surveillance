@@ -1,4 +1,4 @@
-import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
+import { createFileRoute, Link, useNavigate, redirect } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import {
@@ -21,9 +21,19 @@ import { useRoles } from "@/hooks/use-roles";
 import { supabase } from "@/integrations/supabase/client";
 import { REGIONS, type Case } from "@/lib/mock-data";
 import { SYMPTOMS } from "@/lib/intake-data";
+import { DEFAULT_INTAKE_FORM, intakeSchema, type IntakeForm } from "@/lib/intake-schema";
 
 export const Route = createFileRoute("/intake")({
   component: Intake,
+  // Client-side auth redirect; role checks stay in the component because they
+  // need a user_roles query. RLS remains the actual write enforcement.
+  beforeLoad: async ({ location }) => {
+    if (typeof window === "undefined") return;
+    const { data } = await supabase.auth.getSession();
+    if (!data.session) {
+      throw redirect({ to: "/login", search: { redirect: location.href } });
+    }
+  },
   head: () => ({ meta: [{ title: "Case Intake · VectorTrace" }] }),
 });
 
@@ -36,31 +46,9 @@ const STEPS = [
 
 const DRAFT_STORAGE_KEY = "vectortrace_intake_draft_v1";
 
-type FormState = {
-  age: string;
-  sex: "M" | "F" | "";
-  region: string;
-  lat: string;
-  lng: string;
-  syndrome: "HPS" | "HFRS";
-  status: "Pending" | "Suspected" | "Confirmed";
-  symptoms: string[];
-  onsetDate: string;
-  exposure: string;
-};
+type FormState = IntakeForm;
 
-const DEFAULT_FORM: FormState = {
-  age: "",
-  sex: "",
-  region: REGIONS[0].name,
-  lat: String(REGIONS[0].lat),
-  lng: String(REGIONS[0].lng),
-  syndrome: "HPS",
-  status: "Pending",
-  symptoms: ["fever", "myalgia"],
-  onsetDate: "",
-  exposure: "",
-};
+const DEFAULT_FORM: FormState = DEFAULT_INTAKE_FORM;
 
 function Intake() {
   const { user, loading } = useAuth();
@@ -94,7 +82,7 @@ function Intake() {
           <ClipboardCheck className="size-10 mx-auto mb-3 text-primary" />
           <h2 className="font-bold text-[15px]">Authentication required</h2>
           <p className="text-[12.5px] text-muted-foreground mt-1.5">
-            Case submission is restricted to authorized clinicians.
+            Case submission is restricted to the epidemiologist and admin roles.
           </p>
           <Link
             to="/login"
@@ -150,14 +138,17 @@ function Intake() {
 
   const submit = async () => {
     setErr(null);
+    const parsed = intakeSchema.safeParse(form);
+    if (!parsed.success) {
+      setErr(parsed.error.issues[0]?.message ?? "Please review the form for errors");
+      setStep(parsed.error.issues[0]?.path[0] === "age" ? 1 : 4);
+      return;
+    }
     setBusy(true);
     try {
       const lat = parseFloat(form.lat);
       const lng = parseFloat(form.lng);
-      if (Number.isNaN(lat) || Number.isNaN(lng)) {
-        throw new Error("Latitude and longitude are required");
-      }
-      const case_id = `HC-${Date.now().toString(36).toUpperCase()}`;
+      const case_id = `HC-${crypto.randomUUID()}`;
       const reportedAt = form.onsetDate
         ? new Date(form.onsetDate).toISOString()
         : new Date().toISOString();
@@ -171,6 +162,8 @@ function Intake() {
         status: form.status,
         age: form.age ? parseInt(form.age, 10) : null,
         sex: form.sex || null,
+        symptoms: form.symptoms,
+        exposure: form.exposure.trim() || null,
         reported_at: reportedAt,
       });
       if (error) throw error;
@@ -183,8 +176,10 @@ function Intake() {
         date: reportedAt,
         syndrome: form.syndrome,
         status: form.status,
-        age: form.age ? parseInt(form.age, 10) : 0,
-        sex: form.sex || "M",
+        age: form.age ? parseInt(form.age, 10) : null,
+        sex: form.sex || null,
+        symptoms: form.symptoms,
+        exposure: form.exposure.trim() || null,
       };
 
       queryClient.setQueryData<Case[]>(["hanta_cases"], (prev = []) => [
@@ -286,8 +281,11 @@ function Intake() {
         {step === 1 && (
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div>
-              <label className="block text-[12px] font-semibold mb-1.5">Age</label>
+              <label htmlFor="intake-age" className="block text-[12px] font-semibold mb-1.5">
+                Age
+              </label>
               <input
+                id="intake-age"
                 type="number"
                 min={0}
                 max={120}
@@ -297,13 +295,14 @@ function Intake() {
                 className="w-full h-10 px-3 rounded-md border border-input bg-background text-[13px] focus:outline-none focus:ring-2 focus:ring-ring"
               />
             </div>
-            <div>
-              <label className="block text-[12px] font-semibold mb-1.5">Sex</label>
+            <fieldset>
+              <legend className="block text-[12px] font-semibold mb-1.5">Sex</legend>
               <div className="flex gap-2">
                 {(["M", "F"] as const).map((s) => (
                   <button
                     key={s}
                     type="button"
+                    aria-pressed={form.sex === s}
                     onClick={() => upd("sex", s)}
                     className={cn(
                       "flex-1 h-10 rounded-md border text-[13px] font-medium",
@@ -316,10 +315,13 @@ function Intake() {
                   </button>
                 ))}
               </div>
-            </div>
+            </fieldset>
             <div>
-              <label className="block text-[12px] font-semibold mb-1.5">Region</label>
+              <label htmlFor="intake-region" className="block text-[12px] font-semibold mb-1.5">
+                Region
+              </label>
               <select
+                id="intake-region"
                 value={form.region}
                 onChange={(e) => handleRegionChange(e.target.value)}
                 className="w-full h-10 px-3 rounded-md border border-input bg-background text-[13px] focus:outline-none focus:ring-2 focus:ring-ring"
@@ -333,8 +335,11 @@ function Intake() {
             </div>
             <div className="grid grid-cols-2 gap-2">
               <div>
-                <label className="block text-[12px] font-semibold mb-1.5">Latitude</label>
+                <label htmlFor="intake-lat" className="block text-[12px] font-semibold mb-1.5">
+                  Latitude
+                </label>
                 <input
+                  id="intake-lat"
                   value={form.lat}
                   onChange={(e) => upd("lat", e.target.value)}
                   placeholder="-41.13"
@@ -342,8 +347,11 @@ function Intake() {
                 />
               </div>
               <div>
-                <label className="block text-[12px] font-semibold mb-1.5">Longitude</label>
+                <label htmlFor="intake-lng" className="block text-[12px] font-semibold mb-1.5">
+                  Longitude
+                </label>
                 <input
+                  id="intake-lng"
                   value={form.lng}
                   onChange={(e) => upd("lng", e.target.value)}
                   placeholder="-71.31"
@@ -366,8 +374,11 @@ function Intake() {
         {step === 3 && (
           <div className="space-y-4">
             <div>
-              <label className="block text-[12px] font-semibold mb-1.5">Suspected exposure</label>
+              <label htmlFor="intake-exposure" className="block text-[12px] font-semibold mb-1.5">
+                Suspected exposure
+              </label>
               <textarea
+                id="intake-exposure"
                 rows={5}
                 value={form.exposure}
                 onChange={(e) => upd("exposure", e.target.value)}
@@ -375,13 +386,14 @@ function Intake() {
                 className="w-full px-3 py-2 rounded-md border border-input bg-background text-[13px] focus:outline-none focus:ring-2 focus:ring-ring"
               />
             </div>
-            <div>
-              <label className="block text-[12px] font-semibold mb-1.5">Lab status</label>
+            <fieldset>
+              <legend className="block text-[12px] font-semibold mb-1.5">Lab status</legend>
               <div className="flex gap-2">
                 {(["Pending", "Suspected", "Confirmed"] as const).map((s) => (
                   <button
                     key={s}
                     type="button"
+                    aria-pressed={form.status === s}
                     onClick={() => upd("status", s)}
                     className={cn(
                       "flex-1 h-10 rounded-md border text-[13px] font-medium",
@@ -394,7 +406,7 @@ function Intake() {
                   </button>
                 ))}
               </div>
-            </div>
+            </fieldset>
           </div>
         )}
 

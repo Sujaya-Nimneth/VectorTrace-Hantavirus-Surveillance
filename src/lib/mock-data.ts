@@ -6,8 +6,10 @@ export type Case = {
   date: string;
   syndrome: "HPS" | "HFRS";
   status: "Confirmed" | "Suspected" | "Pending";
-  age: number;
-  sex: "M" | "F";
+  age: number | null;
+  sex: "M" | "F" | null;
+  symptoms: string[];
+  exposure: string | null;
 };
 export type RodentSite = {
   id: string;
@@ -20,7 +22,7 @@ export type RodentSite = {
 };
 export type Alert = {
   id: string;
-  ts: string;
+  createdAt: string;
   level: "critical" | "warning" | "info";
   title: string;
   region: string;

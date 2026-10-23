@@ -4,6 +4,8 @@ const healthUrl = process.env.HEALTHCHECK_URL || "";
 const healthInterval = Number.parseInt(process.env.HEALTHCHECK_INTERVAL_SECONDS || "300", 10);
 const ingestToken = process.env.INGEST_TOKEN || "";
 
+const timers = [];
+
 async function callEndpoint(url, label, token) {
   if (!url) return;
   const start = Date.now();
@@ -30,10 +32,32 @@ function schedule(url, intervalSeconds, label, token) {
     return;
   }
   const interval = Math.max(30, intervalSeconds || 60) * 1000;
-  const run = () => callEndpoint(url, label, token);
-  run();
-  setInterval(run, interval);
+  let inFlight = false;
+  const run = async () => {
+    // Skip when the previous tick is still running (Firecrawl scrapes can
+    // take up to 120s) so intervals can't pile up.
+    if (inFlight) {
+      console.warn(`[infra-runner] ${label} skipped: previous run still in flight`);
+      return;
+    }
+    inFlight = true;
+    try {
+      await callEndpoint(url, label, token);
+    } finally {
+      inFlight = false;
+    }
+  };
+  timers.push(setInterval(run, interval));
+  console.log(`[infra-runner] ${label} scheduled every ${interval / 1000}s`);
 }
 
 schedule(ingestUrl, ingestInterval, "ingest-don-feed", ingestToken);
 schedule(healthUrl, healthInterval, "infra-health-check", ingestToken);
+
+function shutdown(signal) {
+  console.log(`[infra-runner] received ${signal}, shutting down`);
+  for (const t of timers) clearInterval(t);
+  process.exit(0);
+}
+process.on("SIGTERM", () => shutdown("SIGTERM"));
+process.on("SIGINT", () => shutdown("SIGINT"));

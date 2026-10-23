@@ -12,6 +12,8 @@ import {
 } from "recharts";
 import { useCases } from "@/hooks/use-surveillance";
 import { REGIONS } from "@/lib/mock-data";
+import { QueryError } from "./QueryError";
+import { Skeleton } from "./Skeleton";
 
 type BucketRow = {
   date: string;
@@ -20,7 +22,7 @@ type BucketRow = {
 };
 
 export function EpidemicCurve({ days = 90 }: { days?: 7 | 30 | 90 }) {
-  const { data: CASES } = useCases();
+  const { data: CASES, loading, error, refetch } = useCases();
 
   const data = useMemo(() => {
     const step = days === 90 ? 3 : 1;
@@ -75,7 +77,21 @@ export function EpidemicCurve({ days = 90 }: { days?: 7 | 30 | 90 }) {
     "var(--primary)",
   ];
 
-  const xAxisInterval = days === 7 ? 0 : days === 30 ? 3 : 3;
+  const xAxisInterval = days === 7 ? 0 : 3;
+
+  if (error) {
+    return (
+      <div className="h-[300px] grid place-items-center px-4">
+        <div className="w-full max-w-md">
+          <QueryError what="epidemic curve" error={error} onRetry={() => refetch()} />
+        </div>
+      </div>
+    );
+  }
+
+  if (loading) {
+    return <Skeleton className="h-[300px] w-full" />;
+  }
 
   return (
     <ResponsiveContainer width="100%" height={300}>

@@ -24,8 +24,11 @@ export function Step2Clinical({ syndrome, symptoms, onsetDate, onChange }: Step2
   return (
     <div className="space-y-6">
       <div>
-        <label className="block text-[12px] font-semibold mb-2">Symptom onset date</label>
+        <label htmlFor="intake-onset" className="block text-[12px] font-semibold mb-2">
+          Symptom onset date
+        </label>
         <input
+          id="intake-onset"
           type="date"
           value={onsetDate}
           onChange={(e) => onChange({ onsetDate: e.target.value })}
@@ -33,8 +36,8 @@ export function Step2Clinical({ syndrome, symptoms, onsetDate, onChange }: Step2
         />
       </div>
 
-      <div>
-        <label className="block text-[12px] font-semibold mb-2">Reported symptoms</label>
+      <fieldset>
+        <legend className="block text-[12px] font-semibold mb-2">Reported symptoms</legend>
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2">
           {SYMPTOMS.map((s) => {
             const on = sympSet.has(s.k);
@@ -43,6 +46,7 @@ export function Step2Clinical({ syndrome, symptoms, onsetDate, onChange }: Step2
               <button
                 key={s.k}
                 type="button"
+                aria-pressed={on}
                 onClick={() => toggle(s.k)}
                 className={cn(
                   "flex items-center gap-3 px-3.5 py-3 rounded-md border text-[13px] transition-all text-left",
@@ -72,10 +76,10 @@ export function Step2Clinical({ syndrome, symptoms, onsetDate, onChange }: Step2
             );
           })}
         </div>
-      </div>
+      </fieldset>
 
-      <div>
-        <label className="block text-[12px] font-semibold mb-2">Syndrome suspected</label>
+      <fieldset>
+        <legend className="block text-[12px] font-semibold mb-2">Syndrome suspected</legend>
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 max-w-md">
           {(
             [
@@ -88,6 +92,7 @@ export function Step2Clinical({ syndrome, symptoms, onsetDate, onChange }: Step2
               <button
                 key={o.k}
                 type="button"
+                aria-pressed={on}
                 onClick={() => onChange({ syndrome: o.k })}
                 className={cn(
                   "p-4 rounded-md border text-left transition-all",
@@ -112,7 +117,7 @@ export function Step2Clinical({ syndrome, symptoms, onsetDate, onChange }: Step2
             );
           })}
         </div>
-      </div>
+      </fieldset>
     </div>
   );
 }
