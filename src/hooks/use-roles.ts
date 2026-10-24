@@ -21,7 +21,7 @@ export function useRoles() {
         .select("role")
         .eq("user_id", user.id);
       if (error) throw new Error(error.message);
-      return data.map((r) => r.role as Role);
+      return data.map((r) => r.role);
     },
     staleTime: 5 * 60_000,
   });
