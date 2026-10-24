@@ -119,8 +119,10 @@ function Dashboard() {
       {loading ? (
         <div
           className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4"
+          role="status"
           aria-label="Loading metrics"
         >
+          <span className="sr-only">Loading metrics…</span>
           {[0, 1, 2, 3].map((i) => (
             <Skeleton key={i} className="h-[118px] w-full rounded-lg" />
           ))}

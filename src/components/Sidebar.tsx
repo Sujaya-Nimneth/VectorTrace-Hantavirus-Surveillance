@@ -1,3 +1,4 @@
+import { useEffect } from "react";
 import { Link, useRouterState } from "@tanstack/react-router";
 import { LayoutDashboard, Map, ClipboardPlus, ServerCog, Activity, X } from "lucide-react";
 import { cn } from "@/lib/utils";
@@ -6,16 +7,32 @@ import { isDemoMode } from "@/lib/demo-mode";
 
 const nav = [
   { to: "/", label: "Executive Dashboard", icon: LayoutDashboard },
-  { to: "/map", label: "Geospatial Map", icon: Map },
+  { to: "/map", label: "Geospatial Tracker", icon: Map },
   { to: "/intake", label: "Case Intake", icon: ClipboardPlus },
   { to: "/admin", label: "System Infrastructure", icon: ServerCog },
 ];
 
 export function Sidebar({ open = false, onClose }: { open?: boolean; onClose?: () => void }) {
   const path = useRouterState({ select: (s) => s.location.pathname });
-  const { data: cases } = useCases();
-  const { data: rodents } = useRodents();
+  const { data: cases, loading: casesLoading } = useCases();
+  const { data: rodents, loading: rodentsLoading } = useRodents();
   const demo = isDemoMode();
+
+  // While the mobile drawer is open: Escape closes it and the page stops
+  // scrolling behind the overlay.
+  useEffect(() => {
+    if (!open || !onClose) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") onClose();
+    };
+    window.addEventListener("keydown", onKey);
+    const prevOverflow = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    return () => {
+      window.removeEventListener("keydown", onKey);
+      document.body.style.overflow = prevOverflow;
+    };
+  }, [open, onClose]);
 
   const content = (
     <>
@@ -78,7 +95,9 @@ export function Sidebar({ open = false, onClose }: { open?: boolean; onClose?: (
           </div>
         )}
         <div className="text-sidebar-foreground/60">
-          {cases.length} cases · {rodents.length} vector sites
+          {casesLoading || rodentsLoading
+            ? "Loading surveillance totals…"
+            : `${cases.length} cases · ${rodents.length} vector sites`}
         </div>
       </div>
     </>
@@ -96,7 +115,12 @@ export function Sidebar({ open = false, onClose }: { open?: boolean; onClose?: (
             onClick={onClose}
             aria-hidden="true"
           />
-          <aside className="relative z-10 w-64 max-w-[80vw] h-full bg-sidebar text-sidebar-foreground flex flex-col border-r border-sidebar-border shadow-2xl">
+          <aside
+            role="dialog"
+            aria-modal="true"
+            aria-label="Navigation"
+            className="relative z-10 w-64 max-w-[80vw] h-full bg-sidebar text-sidebar-foreground flex flex-col border-r border-sidebar-border shadow-2xl"
+          >
             {content}
           </aside>
         </div>
