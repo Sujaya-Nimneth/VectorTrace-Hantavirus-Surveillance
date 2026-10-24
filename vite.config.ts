@@ -41,13 +41,10 @@ export default defineConfig(({ command, mode }) => {
     build: {
       rollupOptions: {
         output: {
-          manualChunks: {
-            "vendor-tanstack": [
-              "@tanstack/react-router",
-              "@tanstack/react-query",
-              "@tanstack/react-start",
-            ],
-            "vendor-supabase": ["@supabase/supabase-js"],
+          // Vite 8 (rolldown) requires the function form of manualChunks.
+          manualChunks(id: string) {
+            if (id.includes("/node_modules/@tanstack/")) return "vendor-tanstack";
+            if (id.includes("/node_modules/@supabase/")) return "vendor-supabase";
           },
         },
       },
