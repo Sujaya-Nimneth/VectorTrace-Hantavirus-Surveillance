@@ -38,7 +38,7 @@ export const Route = createFileRoute("/admin")({
 
 function AdminGate() {
   const { user, loading: authLoading } = useAuth();
-  const { isAdmin, loading: rolesLoading } = useRoles();
+  const { isAdmin, error: rolesError, loading: rolesLoading } = useRoles();
 
   if (authLoading || (user && rolesLoading)) {
     return (
@@ -63,6 +63,13 @@ function AdminGate() {
             <LogIn className="size-4" /> Sign in
           </Link>
         </div>
+      </div>
+    );
+  }
+  if (rolesError) {
+    return (
+      <div className="p-12 max-w-md mx-auto">
+        <QueryError what="your roles" error={rolesError} onRetry={() => window.location.reload()} />
       </div>
     );
   }

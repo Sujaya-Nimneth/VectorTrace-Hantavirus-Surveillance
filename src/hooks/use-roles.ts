@@ -7,7 +7,11 @@ export type Role = "admin" | "epidemiologist" | "viewer";
 export function useRoles() {
   const { user, loading: authLoading } = useAuth();
 
-  const { data: roles = [], isLoading } = useQuery({
+  const {
+    data: roles = [],
+    isLoading,
+    error,
+  } = useQuery({
     queryKey: ["user_roles", user?.id],
     enabled: !authLoading && !!user,
     queryFn: async (): Promise<Role[]> => {
@@ -16,7 +20,7 @@ export function useRoles() {
         .from("user_roles")
         .select("role")
         .eq("user_id", user.id);
-      if (error || !data) return [];
+      if (error) throw new Error(error.message);
       return data.map((r) => r.role as Role);
     },
     staleTime: 5 * 60_000,
@@ -24,8 +28,9 @@ export function useRoles() {
 
   return {
     roles,
+    error,
     loading: authLoading || (!!user && isLoading),
-    isAdmin: roles.includes("admin"),
-    isClinician: roles.includes("admin") || roles.includes("epidemiologist"),
+    isAdmin: !error && roles.includes("admin"),
+    isClinician: !error && (roles.includes("admin") || roles.includes("epidemiologist")),
   };
 }
