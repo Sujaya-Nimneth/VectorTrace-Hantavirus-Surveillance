@@ -23,7 +23,10 @@ possible, a suggested fix. You should hear back within a few days.
 
 ## Historical exposure
 
-An early commit pushed a `.env` containing Supabase credentials. Those values
-must be considered compromised and rotated in the Supabase dashboard
-(publishable key + `INGEST_TOKEN`); the file was removed from the tree and
-`.env` is gitignored. If you cloned before rotation, do not reuse those keys.
+An early commit pushed a `.env` containing Supabase credentials. The file's
+history has since been scrubbed from this repository with `git filter-repo`,
+but the values must still be treated as compromised: clones, forks, and
+GitHub's commit caches made before the scrub may retain the old blobs.
+**Rotate the publishable key and `INGEST_TOKEN` in the Supabase dashboard
+regardless.** `.env` is gitignored and `.env.example` contains placeholders
+only.
