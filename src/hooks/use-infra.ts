@@ -21,8 +21,9 @@ export type ApiUptime = {
 
 export type DbMetric = {
   latency_ms: number;
-  pool_used: number;
-  pool_max: number;
+  pool_used: number | null;
+  pool_max: number | null;
+  source: string;
   checked_at: string;
 };
 
@@ -54,8 +55,9 @@ export type InfraSnapshot = {
   db: {
     avgLatency: number;
     p95Latency: number;
-    poolUsed: number;
-    poolMax: number;
+    poolUsed: number | null;
+    poolMax: number | null;
+    poolSource: string;
     lastCheckedAt: string | null;
   } | null;
   logs: LogEntry[];
@@ -77,7 +79,7 @@ async function fetchInfra(): Promise<InfraSnapshot> {
       .limit(200),
     supabase
       .from("infra_db_metrics")
-      .select("latency_ms,pool_used,pool_max,checked_at")
+      .select("latency_ms,pool_used,pool_max,source,checked_at")
       .order("checked_at", { ascending: false })
       .limit(40),
   ]);
@@ -166,22 +168,29 @@ async function fetchInfra(): Promise<InfraSnapshot> {
       p95Latency: values[p95Index],
       poolUsed: latest.pool_used,
       poolMax: latest.pool_max,
+      poolSource: latest.source,
       lastCheckedAt: latest.checked_at,
     };
 
+    // Label each point with its actual clock time: rows arrive every 5
+    // minutes, so synthetic "-Nm" labels understate elapsed time 5x.
     latencySeries = dbRows
       .slice()
       .reverse()
-      .map((r, i) => ({
-        t: `-${dbRows.length - 1 - i}m`,
+      .map((r) => ({
+        t: formatClock(r.checked_at),
         ms: r.latency_ms,
       }));
 
     for (const r of dbRows.slice(0, 4)) {
+      const pool =
+        r.source === "pg_stat_activity" && r.pool_used != null && r.pool_max != null
+          ? `${r.pool_used}/${r.pool_max}`
+          : "n/a";
       logs.push({
         ts: formatClock(r.checked_at),
         lvl: r.latency_ms > 250 ? "WARN" : "OK",
-        msg: `db.metrics · latency=${r.latency_ms}ms pool=${r.pool_used}/${r.pool_max}`,
+        msg: `db.metrics · latency=${r.latency_ms}ms pool=${pool}`,
       });
     }
   }

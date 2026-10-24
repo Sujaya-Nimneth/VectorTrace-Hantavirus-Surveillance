@@ -55,7 +55,10 @@ async function checkService(service: { name: string; url: string }) {
       service.name === "Supabase REST"
         ? {
             apikey:
-              Deno.env.get("SUPABASE_ANON_KEY") ?? Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? "",
+              Deno.env.get("SUPABASE_PUBLISHABLE_KEY") ??
+              Deno.env.get("SUPABASE_ANON_KEY") ??
+              Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ??
+              "",
           }
         : {};
     const res = await fetch(url, { method: "GET", headers });
@@ -85,10 +88,14 @@ Deno.serve(async (req) => {
       );
     }
 
-    const supabase = createClient(
-      Deno.env.get("SUPABASE_URL")!,
-      Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!,
-    );
+    const supabaseUrl = Deno.env.get("SUPABASE_URL");
+    const supabaseKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
+    if (!supabaseUrl || !supabaseKey) {
+      return new Response("SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY secrets must both be set", {
+        status: 500,
+      });
+    }
+    const supabase = createClient(supabaseUrl, supabaseKey);
 
     const apiChecks = await Promise.all(SERVICES.map(checkService));
     if (apiChecks.length) {
@@ -107,18 +114,25 @@ Deno.serve(async (req) => {
     const { error: probeError } = await supabase
       .from("hanta_cases")
       .select("id", { count: "exact", head: true });
-    const latencyMs = Math.max(1, Date.now() - dbStart);
-    if (probeError) console.error("DB probe failed", probeError);
+    if (probeError) {
+      // The DB probe itself failed: recording a fabricated 1ms latency row
+      // would hide the outage, so fail the check instead.
+      console.error("DB probe failed", probeError);
+      return new Response(`db probe failed: ${probeError.message}`, { status: 500 });
+    }
+    const latencyMs = Date.now() - dbStart;
 
-    let poolUsed = Math.max(1, Math.round(latencyMs / 4));
-    let poolMax = 100;
-    let source = "simulated";
+    // Pool numbers are only real when pg_stat_activity answers. Otherwise
+    // leave them NULL rather than deriving a fake value from latency.
+    let poolUsed: number | null = null;
+    let poolMax: number | null = null;
+    let source = "unavailable";
 
     const { data: poolHealth, error: rpcError } = await supabase.rpc("get_db_pool_health");
     if (rpcError) console.error("get_db_pool_health failed", rpcError);
     if (poolHealth && Array.isArray(poolHealth) && poolHealth.length) {
-      poolUsed = poolHealth[0].active_connections ?? poolUsed;
-      poolMax = poolHealth[0].max_connections ?? poolMax;
+      poolUsed = poolHealth[0].active_connections ?? null;
+      poolMax = poolHealth[0].max_connections ?? null;
       source = "pg_stat_activity";
     }
 
