@@ -13,8 +13,9 @@ import "leaflet.heat";
 import { useCases, useRodents } from "@/hooks/use-surveillance";
 import { useNow } from "@/hooks/use-now";
 import type { Case, RodentSite } from "@/lib/mock-data";
-import { Layers, Calendar, X, MapPin, AlertTriangle, Rat, Activity } from "lucide-react";
+import { Layers, Calendar, X, MapPin, AlertTriangle, Rat, Activity, Loader2 } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { QueryError } from "@/components/QueryError";
 import { MAP_FOCUS_EVENT, MAP_FOCUS_STORAGE_KEY, type MapFocusTarget } from "@/components/TopBar";
 
 type HeatLayerInstance = L.Layer & {
@@ -199,9 +200,21 @@ export default function MapView() {
   const [layers, setLayers] = useState({ cases: true, rodents: true, density: true });
   const [range, setRange] = useState(30);
   const [selected, setSelected] = useState<Case | null>(null);
-  const { data: CASES } = useCases();
-  const { data: RODENTS } = useRodents();
+  const {
+    data: CASES,
+    loading: casesLoading,
+    error: casesError,
+    refetch: refetchCases,
+  } = useCases();
+  const {
+    data: RODENTS,
+    loading: rodentsLoading,
+    error: rodentsError,
+    refetch: refetchRodents,
+  } = useRodents();
   const now = useNow();
+  const loadError = casesError ?? rodentsError ?? null;
+  const loading = casesLoading || rodentsLoading;
 
   const visibleCases = useMemo(() => {
     return CASES.filter((c) => (now - +new Date(c.date)) / 86400000 <= range);
@@ -241,176 +254,209 @@ export default function MapView() {
 
   return (
     <div className="relative h-full w-full bg-map-canvas">
-      <MapContainer
-        center={[-34, -64]}
-        zoom={4}
-        className="h-full w-full z-0"
-        style={{ background: "var(--map-canvas)" }}
-      >
-        <TileLayer
-          attribution="&copy; OpenStreetMap, &copy; CARTO"
-          url="https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png"
-        />
-        <MapController points={points} range={range} cases={CASES} onSelectCase={setSelected} />
-        {layers.density && heatPoints.length > 0 && <HeatLayer points={heatPoints} />}
-        {layers.cases &&
-          visibleCases.map((c, i) => (
-            <CaseDot key={c.id} c={c} pulse={i < 25} onSelect={setSelected} />
-          ))}
-        {layers.rodents && visibleRodents.map((r) => <RodentPin key={r.id} r={r} />)}
-      </MapContainer>
+      {loadError ? (
+        <div className="absolute inset-0 z-[600] grid place-items-center bg-map-canvas p-6">
+          <div className="w-full max-w-md">
+            <QueryError
+              what="surveillance map data"
+              error={loadError}
+              onRetry={() => {
+                void refetchCases();
+                void refetchRodents();
+              }}
+            />
+          </div>
+        </div>
+      ) : loading ? (
+        <div
+          className="absolute inset-0 z-[600] grid place-items-center bg-map-canvas"
+          role="status"
+        >
+          <span className="sr-only">Loading map data…</span>
+          <Loader2 className="size-6 animate-spin text-white/70" />
+        </div>
+      ) : (
+        <>
+          <MapContainer
+            center={[-34, -64]}
+            zoom={4}
+            className="h-full w-full z-0"
+            style={{ background: "var(--map-canvas)" }}
+          >
+            <TileLayer
+              attribution="&copy; OpenStreetMap, &copy; CARTO"
+              url="https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png"
+            />
+            <MapController points={points} range={range} cases={CASES} onSelectCase={setSelected} />
+            {layers.density && heatPoints.length > 0 && <HeatLayer points={heatPoints} />}
+            {layers.cases &&
+              visibleCases.map((c, i) => (
+                <CaseDot key={c.id} c={c} pulse={i < 25} onSelect={setSelected} />
+              ))}
+            {layers.rodents && visibleRodents.map((r) => <RodentPin key={r.id} r={r} />)}
+          </MapContainer>
 
-      {/* Layer switcher */}
-      <div className="absolute top-4 right-4 z-[400] bg-map-panel/95 backdrop-blur border border-white/10 rounded-lg p-3 shadow-xl text-white w-52 sm:w-56">
-        <div className="flex items-center gap-2 text-[11px] uppercase tracking-wider text-white/60 mb-2.5">
-          <Layers className="size-3.5" /> Data Layers
-        </div>
-        {(
-          [
-            { k: "cases", label: "Human Cases", color: "bg-alert", icon: AlertTriangle },
-            { k: "rodents", label: "Rodent Vectors", color: "bg-map-rodent", icon: Rat },
-            { k: "density", label: "Risk Density", color: "bg-warning", icon: Activity },
-          ] as const
-        ).map((l) => {
-          const Icon = l.icon;
-          return (
-            <label
-              key={l.k}
-              className="flex items-center gap-2.5 py-1.5 cursor-pointer hover:bg-white/5 px-1.5 rounded"
-            >
-              <input
-                type="checkbox"
-                checked={layers[l.k]}
-                onChange={(e) => setLayers((s) => ({ ...s, [l.k]: e.target.checked }))}
-                className="accent-teal size-3.5"
-              />
-              <span className={cn("size-2 rounded-full", l.color)} />
-              <Icon className="size-3.5 text-white/60" />
-              <span className="text-[12px] flex-1">{l.label}</span>
-            </label>
-          );
-        })}
-      </div>
-
-      {/* Time slider */}
-      <div className="absolute bottom-4 sm:bottom-6 left-1/2 -translate-x-1/2 z-[400] max-w-[calc(100vw-2rem)] bg-map-panel/95 backdrop-blur border border-white/10 rounded-lg px-3 sm:px-4 py-2.5 sm:py-3 shadow-xl text-white flex flex-wrap items-center justify-center gap-2 sm:gap-3">
-        <div className="flex items-center gap-1.5">
-          <Calendar className="size-4 text-teal" />
-          <span className="text-[11px] uppercase tracking-wider text-white/60 hidden sm:inline">
-            Time window
-          </span>
-        </div>
-        <div className="flex gap-1">
-          {RANGES.map((r) => (
-            <button
-              key={r.days}
-              type="button"
-              aria-pressed={range === r.days}
-              onClick={() => setRange(r.days)}
-              className={cn(
-                "px-2.5 sm:px-3 py-1 rounded text-[12px] font-semibold transition-colors",
-                range === r.days ? "bg-teal text-white" : "text-white/60 hover:bg-white/5",
-              )}
-            >
-              Last {r.label}
-            </button>
-          ))}
-        </div>
-        <div className="text-[11px] text-white/60 sm:border-l sm:border-white/10 sm:pl-3">
-          {visibleCases.length} cases · {visibleRodents.length} sites
-        </div>
-      </div>
-
-      {/* Detail drawer */}
-      {selected && (
-        <div className="absolute top-0 right-0 bottom-0 w-full sm:w-[380px] z-[500] bg-card border-l border-border shadow-2xl overflow-y-auto animate-in slide-in-from-right duration-200">
-          <div className="p-5 border-b border-border flex items-start justify-between bg-primary text-primary-foreground">
-            <div>
-              <div className="text-[11px] uppercase tracking-wider opacity-70">Case Detail</div>
-              <div className="text-lg font-bold mt-0.5">{selected.id}</div>
-              <div className="text-[12px] opacity-80 mt-1 flex items-center gap-1.5">
-                <MapPin className="size-3" /> {selected.region}
-              </div>
+          {/* Layer switcher */}
+          <div className="absolute top-4 right-4 z-[400] bg-map-panel/95 backdrop-blur border border-white/10 rounded-lg p-3 shadow-xl text-white w-52 sm:w-56">
+            <div className="flex items-center gap-2 text-[11px] uppercase tracking-wider text-white/60 mb-2.5">
+              <Layers className="size-3.5" /> Data Layers
             </div>
-            <button
-              type="button"
-              onClick={() => setSelected(null)}
-              aria-label="Close case details"
-              className="p-1.5 rounded hover:bg-white/10"
-            >
-              <X className="size-4" />
-            </button>
+            {(
+              [
+                { k: "cases", label: "Human Cases", color: "bg-alert", icon: AlertTriangle },
+                { k: "rodents", label: "Rodent Vectors", color: "bg-map-rodent", icon: Rat },
+                { k: "density", label: "Risk Density", color: "bg-warning", icon: Activity },
+              ] as const
+            ).map((l) => {
+              const Icon = l.icon;
+              return (
+                <label
+                  key={l.k}
+                  className="flex items-center gap-2.5 py-1.5 cursor-pointer hover:bg-white/5 px-1.5 rounded"
+                >
+                  <input
+                    type="checkbox"
+                    checked={layers[l.k]}
+                    onChange={(e) => setLayers((s) => ({ ...s, [l.k]: e.target.checked }))}
+                    className="accent-teal size-3.5"
+                  />
+                  <span className={cn("size-2 rounded-full", l.color)} />
+                  <Icon className="size-3.5 text-white/60" />
+                  <span className="text-[12px] flex-1">{l.label}</span>
+                </label>
+              );
+            })}
           </div>
 
-          <div className="p-5 space-y-4">
-            <div className="grid grid-cols-2 gap-3 text-[12px]">
-              <Field
-                label="Status"
-                value={selected.status}
-                accent={selected.status === "Confirmed" ? "alert" : "warning"}
-              />
-              <Field label="Syndrome" value={selected.syndrome} />
-              <Field label="Age" value={selected.age != null ? `${selected.age}y` : "—"} />
-              <Field label="Sex" value={selected.sex ?? "Unknown"} />
-              <Field label="Reported" value={new Date(selected.date).toLocaleDateString()} />
-              <Field
-                label="Coords"
-                value={`${selected.lat.toFixed(2)}, ${selected.lng.toFixed(2)}`}
-              />
+          {/* Time slider */}
+          <div className="absolute bottom-4 sm:bottom-6 left-1/2 -translate-x-1/2 z-[400] max-w-[calc(100vw-2rem)] bg-map-panel/95 backdrop-blur border border-white/10 rounded-lg px-3 sm:px-4 py-2.5 sm:py-3 shadow-xl text-white flex flex-wrap items-center justify-center gap-2 sm:gap-3">
+            <div className="flex items-center gap-1.5">
+              <Calendar className="size-4 text-teal" />
+              <span className="text-[11px] uppercase tracking-wider text-white/60 hidden sm:inline">
+                Time window
+              </span>
             </div>
+            <div className="flex gap-1">
+              {RANGES.map((r) => (
+                <button
+                  key={r.days}
+                  type="button"
+                  aria-pressed={range === r.days}
+                  onClick={() => setRange(r.days)}
+                  className={cn(
+                    "px-2.5 sm:px-3 py-1 rounded text-[12px] font-semibold transition-colors",
+                    range === r.days ? "bg-teal text-white" : "text-white/60 hover:bg-white/5",
+                  )}
+                >
+                  Last {r.label}
+                </button>
+              ))}
+            </div>
+            <div className="text-[11px] text-white/60 sm:border-l sm:border-white/10 sm:pl-3">
+              {visibleCases.length} cases · {visibleRodents.length} sites
+            </div>
+          </div>
 
-            {(selected.symptoms.length > 0 || selected.exposure) && (
-              <div className="rounded-md border border-border p-3">
-                <div className="text-[10px] uppercase tracking-wider text-muted-foreground mb-2">
-                  Clinical Notes
+          {/* Empty state: data loaded but nothing in range */}
+          {visibleCases.length === 0 && visibleRodents.length === 0 && (
+            <div className="absolute top-4 left-1/2 -translate-x-1/2 z-[400] bg-map-panel/95 backdrop-blur border border-white/10 rounded-lg px-4 py-2.5 text-white/80 text-[12px] flex items-center gap-2 shadow-xl">
+              <AlertTriangle className="size-3.5 text-warning" />
+              No surveillance data within the last {range} days.
+            </div>
+          )}
+
+          {/* Detail drawer */}
+          {selected && (
+            <div className="absolute top-0 right-0 bottom-0 w-full sm:w-[380px] z-[500] bg-card border-l border-border shadow-2xl overflow-y-auto animate-in slide-in-from-right duration-200">
+              <div className="p-5 border-b border-border flex items-start justify-between bg-primary text-primary-foreground">
+                <div>
+                  <div className="text-[11px] uppercase tracking-wider opacity-70">Case Detail</div>
+                  <div className="text-lg font-bold mt-0.5">{selected.id}</div>
+                  <div className="text-[12px] opacity-80 mt-1 flex items-center gap-1.5">
+                    <MapPin className="size-3" /> {selected.region}
+                  </div>
                 </div>
-                {selected.symptoms.length > 0 && (
-                  <div className="flex flex-wrap gap-1.5">
-                    {selected.symptoms.map((s) => (
-                      <span
-                        key={s}
-                        className="text-[11px] font-medium px-2 py-0.5 rounded-full bg-muted text-muted-foreground"
-                      >
-                        {s}
-                      </span>
-                    ))}
+                <button
+                  type="button"
+                  onClick={() => setSelected(null)}
+                  aria-label="Close case details"
+                  className="p-1.5 rounded hover:bg-white/10"
+                >
+                  <X className="size-4" />
+                </button>
+              </div>
+
+              <div className="p-5 space-y-4">
+                <div className="grid grid-cols-2 gap-3 text-[12px]">
+                  <Field
+                    label="Status"
+                    value={selected.status}
+                    accent={selected.status === "Confirmed" ? "alert" : "warning"}
+                  />
+                  <Field label="Syndrome" value={selected.syndrome} />
+                  <Field label="Age" value={selected.age != null ? `${selected.age}y` : "—"} />
+                  <Field label="Sex" value={selected.sex ?? "Unknown"} />
+                  <Field label="Reported" value={new Date(selected.date).toLocaleDateString()} />
+                  <Field
+                    label="Coords"
+                    value={`${selected.lat.toFixed(2)}, ${selected.lng.toFixed(2)}`}
+                  />
+                </div>
+
+                {(selected.symptoms.length > 0 || selected.exposure) && (
+                  <div className="rounded-md border border-border p-3">
+                    <div className="text-[10px] uppercase tracking-wider text-muted-foreground mb-2">
+                      Clinical Notes
+                    </div>
+                    {selected.symptoms.length > 0 && (
+                      <div className="flex flex-wrap gap-1.5">
+                        {selected.symptoms.map((s) => (
+                          <span
+                            key={s}
+                            className="text-[11px] font-medium px-2 py-0.5 rounded-full bg-muted text-muted-foreground"
+                          >
+                            {s}
+                          </span>
+                        ))}
+                      </div>
+                    )}
+                    {selected.exposure && (
+                      <p className="text-[11.5px] text-muted-foreground mt-2 leading-snug">
+                        {selected.exposure}
+                      </p>
+                    )}
                   </div>
                 )}
-                {selected.exposure && (
-                  <p className="text-[11.5px] text-muted-foreground mt-2 leading-snug">
-                    {selected.exposure}
-                  </p>
+
+                {proxRodents.length > 0 ? (
+                  <div className="rounded-md border border-alert/30 bg-alert/10 p-3">
+                    <div className="flex items-center gap-1.5 text-alert font-semibold text-[12px] mb-1.5">
+                      <AlertTriangle className="size-3.5" /> Proximity Alert
+                    </div>
+                    <div className="text-[11.5px] text-foreground">
+                      {proxRodents.length} positive rodent site{proxRodents.length > 1 ? "s" : ""}{" "}
+                      within 5km radius.
+                    </div>
+                    <ul className="mt-2 space-y-1 text-[11px] text-muted-foreground">
+                      {proxRodents.slice(0, 3).map((r) => (
+                        <li key={r.id} className="flex justify-between">
+                          <span>
+                            {r.id} · {r.species}
+                          </span>
+                          <span className="text-alert font-semibold">{r.positivity}%</span>
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+                ) : (
+                  <div className="rounded-md border border-success/30 bg-success/10 p-3 text-[12px] text-success">
+                    No high-positivity rodent sites within 5km radius.
+                  </div>
                 )}
               </div>
-            )}
-
-            {proxRodents.length > 0 ? (
-              <div className="rounded-md border border-alert/30 bg-alert/10 p-3">
-                <div className="flex items-center gap-1.5 text-alert font-semibold text-[12px] mb-1.5">
-                  <AlertTriangle className="size-3.5" /> Proximity Alert
-                </div>
-                <div className="text-[11.5px] text-foreground">
-                  {proxRodents.length} positive rodent site{proxRodents.length > 1 ? "s" : ""}{" "}
-                  within 5km radius.
-                </div>
-                <ul className="mt-2 space-y-1 text-[11px] text-muted-foreground">
-                  {proxRodents.slice(0, 3).map((r) => (
-                    <li key={r.id} className="flex justify-between">
-                      <span>
-                        {r.id} · {r.species}
-                      </span>
-                      <span className="text-alert font-semibold">{r.positivity}%</span>
-                    </li>
-                  ))}
-                </ul>
-              </div>
-            ) : (
-              <div className="rounded-md border border-success/30 bg-success/10 p-3 text-[12px] text-success">
-                No high-positivity rodent sites within 5km radius.
-              </div>
-            )}
-          </div>
-        </div>
+            </div>
+          )}
+        </>
       )}
 
       <style>{`
