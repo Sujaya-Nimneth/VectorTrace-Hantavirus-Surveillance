@@ -1,45 +1,19 @@
 import { useEffect } from "react";
 import { useQuery, useQueryClient, type QueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
+import type { Tables } from "@/integrations/supabase/types";
 import { isDemoMode } from "@/lib/demo-mode";
 import type { Case, RodentSite, Alert } from "@/lib/mock-data";
 import { CASES as MOCK_CASES } from "@/lib/mock-cases";
 import { RODENTS as MOCK_RODENTS } from "@/lib/mock-rodents";
 import { ALERTS as MOCK_ALERTS } from "@/lib/mock-alerts";
 
-type DbCase = {
-  id: string;
-  case_id: string;
-  region: string;
-  lat: number;
-  lng: number;
-  reported_at: string;
-  syndrome: "HPS" | "HFRS";
-  status: "Confirmed" | "Suspected" | "Pending";
-  age?: number | null;
-  sex?: "M" | "F" | null;
-  symptoms?: string[] | null;
-  exposure?: string | null;
-};
+/** Full row (authenticated) or the public projection (anonymous). */
+type DbCase = Tables<"hanta_cases"> | Tables<"hanta_cases_public">;
 
-type DbRodent = {
-  id: string;
-  site_id: string;
-  region: string;
-  lat: number;
-  lng: number;
-  sampled_at: string;
-  positivity: number;
-  species: string;
-};
+type DbRodent = Tables<"rodent_sites">;
 
-type DbAlert = {
-  id: string;
-  level: "critical" | "warning" | "info";
-  title: string;
-  region: string;
-  created_at: string;
-};
+type DbAlert = Tables<"hanta_alerts">;
 
 const mapCase = (r: DbCase): Case => ({
   id: r.case_id,
@@ -49,10 +23,10 @@ const mapCase = (r: DbCase): Case => ({
   date: r.reported_at,
   syndrome: r.syndrome,
   status: r.status,
-  age: r.age ?? null,
-  sex: r.sex ?? null,
-  symptoms: r.symptoms ?? [],
-  exposure: r.exposure ?? null,
+  age: "age" in r ? (r.age ?? null) : null,
+  sex: "sex" in r ? (r.sex ?? null) : null,
+  symptoms: "symptoms" in r ? (r.symptoms ?? []) : [],
+  exposure: "exposure" in r ? (r.exposure ?? null) : null,
 });
 
 const mapRodent = (r: DbRodent): RodentSite => ({
@@ -78,12 +52,11 @@ async function fetchCases(): Promise<Case[]> {
   // Anonymous sessions read the public view (no clinical columns);
   // signed-in readers get the full table through RLS.
   const { data: sessionData } = await supabase.auth.getSession();
-  const table = sessionData.session ? "hanta_cases" : "hanta_cases_public";
-  const { data: rows, error } = await supabase
-    .from(table)
-    .select("*")
-    .order("reported_at", { ascending: false })
-    .limit(500);
+  const select =
+    sessionData.session === null
+      ? supabase.from("hanta_cases_public").select("*")
+      : supabase.from("hanta_cases").select("*");
+  const { data: rows, error } = await select.order("reported_at", { ascending: false }).limit(500);
   if (error) throw new Error(`Failed to load cases: ${error.message}`);
   return (rows as DbCase[]).map(mapCase);
 }

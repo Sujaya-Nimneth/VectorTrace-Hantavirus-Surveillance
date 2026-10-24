@@ -409,6 +409,8 @@ export const Constants = {
       case_sex: ["M", "F"],
       case_status: ["Confirmed", "Suspected", "Pending"],
       case_syndrome: ["HPS", "HFRS"],
+      infra_status: ["ok", "warn", "down"],
+      ingest_status: ["success", "failed"],
     },
   },
 } as const;

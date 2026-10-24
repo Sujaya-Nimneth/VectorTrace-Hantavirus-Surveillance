@@ -1,31 +1,11 @@
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
+import type { Tables } from "@/integrations/supabase/types";
 import { formatClock } from "@/lib/time";
 
-export type IngestRun = {
-  source: string;
-  status: "success" | "failed";
-  started_at: string;
-  finished_at: string | null;
-  records_ingested: number | null;
-  error_message: string | null;
-};
-
-export type ApiUptime = {
-  service: string;
-  status: "ok" | "warn" | "down";
-  latency_ms: number | null;
-  checked_at: string;
-  error_message: string | null;
-};
-
-export type DbMetric = {
-  latency_ms: number;
-  pool_used: number | null;
-  pool_max: number | null;
-  source: string;
-  checked_at: string;
-};
+type IngestRun = Tables<"infra_ingest_runs">;
+type ApiUptime = Tables<"infra_api_uptime">;
+type DbMetricRow = Tables<"infra_db_metrics">;
 
 export type SourceStatus = {
   src: string;
@@ -89,7 +69,7 @@ async function fetchInfra(): Promise<InfraSnapshot> {
 
   const runs = (runsRes.data ?? []) as IngestRun[];
   const apiRows = (apiRes.data ?? []) as ApiUptime[];
-  const dbRows = (dbRes.data ?? []) as DbMetric[];
+  const dbRows = (dbRes.data ?? []) as DbMetricRow[];
 
   const logs: LogEntry[] = [];
 
