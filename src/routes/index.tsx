@@ -49,8 +49,9 @@ function Dashboard() {
       const d = (now - +new Date(iso)) / 86400000;
       return d > minDays && d <= maxDays;
     };
-    const delta = (curr: number, prev: number) =>
-      prev === 0 ? 0 : Math.round(((curr - prev) / prev) * 100);
+    // null = no prior baseline (prev window empty), rendered as "New".
+    const delta = (curr: number, prev: number): number | null =>
+      prev === 0 ? (curr === 0 ? 0 : null) : Math.round(((curr - prev) / prev) * 100);
 
     const last30Cases = cases.filter((c) => inWindow(c.date, -1, 30));
     const prior30Cases = cases.filter((c) => inWindow(c.date, 30, 60));
@@ -81,7 +82,7 @@ function Dashboard() {
         spark: bucketByDay(rodents, 14, now),
       },
       ytd: {
-        value: ytdConfirmed || confirmedCases.length,
+        value: ytdConfirmed,
         delta: delta(last30Confirmed.length, prior30Confirmed.length),
         spark: bucketByDay(confirmedCases, 14, now),
       },

@@ -60,6 +60,7 @@ function Intake() {
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState<string | null>(null);
   const [form, setForm] = useState<FormState>(DEFAULT_FORM);
+  const [draftRestored, setDraftRestored] = useState(false);
 
   useEffect(() => {
     try {
@@ -67,11 +68,23 @@ function Intake() {
       if (saved) {
         const parsed = JSON.parse(saved) as Partial<FormState>;
         setForm((prev) => ({ ...prev, ...parsed }));
+        setDraftRestored(true);
       }
     } catch {
       // ignore invalid draft
     }
   }, []);
+
+  const discardDraft = () => {
+    try {
+      localStorage.removeItem(DRAFT_STORAGE_KEY);
+    } catch {
+      // ignore storage errors
+    }
+    setForm(DEFAULT_FORM);
+    setDraftRestored(false);
+    toast.info("Draft discarded");
+  };
 
   if (loading || (user && rolesLoading)) {
     return <div className="p-12 text-center text-muted-foreground text-[13px]">Loading…</div>;
@@ -226,6 +239,22 @@ function Intake() {
           Submit a clinical hantavirus case for surveillance and lab routing.
         </p>
       </div>
+
+      {draftRestored && (
+        <div className="mb-4 flex items-center justify-between gap-3 rounded-md border border-info/30 bg-info/10 px-3 py-2 text-[12.5px] text-foreground">
+          <span>
+            A saved draft was restored from this browser.
+            <span className="text-muted-foreground"> Review it or start fresh.</span>
+          </span>
+          <button
+            type="button"
+            onClick={discardDraft}
+            className="shrink-0 rounded border border-input px-2.5 py-1 text-[12px] font-semibold text-muted-foreground hover:bg-muted hover:text-foreground"
+          >
+            Discard draft
+          </button>
+        </div>
+      )}
 
       <div className="bg-card border border-border rounded-lg p-4 sm:p-5 mb-4">
         <div className="flex items-center justify-between">
