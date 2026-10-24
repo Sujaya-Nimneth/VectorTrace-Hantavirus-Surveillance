@@ -1,3 +1,14 @@
+export const SECOND_MS = 1_000;
+export const MINUTE_MS = 60_000;
+export const HOUR_MS = 3_600_000;
+export const DAY_MS = 86_400_000;
+
+/** True when `iso` falls within the last `days` days (relative to `now`). */
+export function withinWindow(iso: string, days: number, now: number = Date.now()): boolean {
+  const age = now - +new Date(iso);
+  return age >= 0 && age <= days * DAY_MS;
+}
+
 /** Relative time label ("3m ago") for an ISO timestamp. */
 export function relativeTime(iso: string): string {
   const diff = Math.max(0, (Date.now() - +new Date(iso)) / 1000);

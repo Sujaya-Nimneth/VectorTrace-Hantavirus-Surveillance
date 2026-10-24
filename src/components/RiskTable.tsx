@@ -5,10 +5,9 @@ import { REGIONS } from "@/lib/mock-data";
 import { TrendingUp, ArrowUpDown, ArrowUp, ArrowDown, Download } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { buildCsv, downloadCsv } from "@/lib/csv";
+import { DAY_MS } from "@/lib/time";
 import { QueryError } from "./QueryError";
 import { Skeleton } from "./Skeleton";
-
-const DAY_MS = 86_400_000;
 
 const WINDOWS = [
   { label: "7D", days: 7 },

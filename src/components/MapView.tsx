@@ -15,6 +15,7 @@ import { useNow } from "@/hooks/use-now";
 import { REGIONS, type Case, type RodentSite } from "@/lib/mock-data";
 import { Layers, Calendar, X, MapPin, AlertTriangle, Rat, Activity, Loader2 } from "lucide-react";
 import { useNavigate, useSearch } from "@tanstack/react-router";
+import { DAY_MS } from "@/lib/time";
 import { cn } from "@/lib/utils";
 import { QueryError } from "@/components/QueryError";
 
@@ -216,11 +217,11 @@ export default function MapView() {
   const loading = casesLoading || rodentsLoading;
 
   const visibleCases = useMemo(() => {
-    return CASES.filter((c) => (now - +new Date(c.date)) / 86400000 <= range);
+    return CASES.filter((c) => now - +new Date(c.date) <= range * DAY_MS);
   }, [range, CASES, now]);
 
   const visibleRodents = useMemo(() => {
-    return RODENTS.filter((r) => (now - +new Date(r.date)) / 86400000 <= range);
+    return RODENTS.filter((r) => now - +new Date(r.date) <= range * DAY_MS);
   }, [range, RODENTS, now]);
 
   const points: [number, number][] = useMemo(

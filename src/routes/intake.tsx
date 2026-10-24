@@ -1,4 +1,4 @@
-import { createFileRoute, Link, useNavigate, redirect } from "@tanstack/react-router";
+import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import {
@@ -11,7 +11,6 @@ import {
   ClipboardCheck,
   Save,
   Loader2,
-  LogIn,
 } from "lucide-react";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
@@ -23,18 +22,14 @@ import { supabase } from "@/integrations/supabase/client";
 import { REGIONS, type Case } from "@/lib/mock-data";
 import { SYMPTOMS } from "@/lib/intake-data";
 import { DEFAULT_INTAKE_FORM, intakeSchema, type IntakeForm } from "@/lib/intake-schema";
+import { requireAuth } from "@/lib/auth-gate";
+import { GateCard } from "@/components/GateCard";
 
 export const Route = createFileRoute("/intake")({
   component: Intake,
   // Client-side auth redirect; role checks stay in the component because they
   // need a user_roles query. RLS remains the actual write enforcement.
-  beforeLoad: async ({ location }) => {
-    if (typeof window === "undefined") return;
-    const { data } = await supabase.auth.getSession();
-    if (!data.session) {
-      throw redirect({ to: "/login", search: { redirect: location.href } });
-    }
-  },
+  beforeLoad: async ({ location }) => requireAuth(location.href),
   head: () => ({ meta: [{ title: "Case Intake · VectorTrace" }] }),
 });
 
@@ -47,10 +42,6 @@ const STEPS = [
 
 const DRAFT_STORAGE_KEY = "vectortrace_intake_draft_v1";
 
-type FormState = IntakeForm;
-
-const DEFAULT_FORM: FormState = DEFAULT_INTAKE_FORM;
-
 function Intake() {
   const { user, loading } = useAuth();
   const { isClinician, error: rolesError, loading: rolesLoading } = useRoles();
@@ -59,14 +50,14 @@ function Intake() {
   const [step, setStep] = useState(1);
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState<string | null>(null);
-  const [form, setForm] = useState<FormState>(DEFAULT_FORM);
+  const [form, setForm] = useState<IntakeForm>(DEFAULT_INTAKE_FORM);
   const [draftRestored, setDraftRestored] = useState(false);
 
   useEffect(() => {
     try {
       const saved = localStorage.getItem(DRAFT_STORAGE_KEY);
       if (saved) {
-        const parsed = JSON.parse(saved) as Partial<FormState>;
+        const parsed = JSON.parse(saved) as Partial<IntakeForm>;
         setForm((prev) => ({ ...prev, ...parsed }));
         setDraftRestored(true);
       }
@@ -81,7 +72,7 @@ function Intake() {
     } catch {
       // ignore storage errors
     }
-    setForm(DEFAULT_FORM);
+    setForm(DEFAULT_INTAKE_FORM);
     setDraftRestored(false);
     toast.info("Draft discarded");
   };
@@ -91,21 +82,12 @@ function Intake() {
   }
   if (!user) {
     return (
-      <div className="p-12 max-w-md mx-auto text-center">
-        <div className="bg-card border border-border rounded-lg p-8">
-          <ClipboardCheck className="size-10 mx-auto mb-3 text-primary" />
-          <h2 className="font-bold text-[15px]">Authentication required</h2>
-          <p className="text-[12.5px] text-muted-foreground mt-1.5">
-            Case submission is restricted to the epidemiologist and admin roles.
-          </p>
-          <Link
-            to="/login"
-            className="mt-5 inline-flex items-center gap-1.5 px-4 h-10 rounded-md text-[13px] font-semibold bg-primary text-primary-foreground hover:bg-primary/90"
-          >
-            <LogIn className="size-4" /> Sign in to continue
-          </Link>
-        </div>
-      </div>
+      <GateCard
+        icon={ClipboardCheck}
+        title="Authentication required"
+        body="Case submission is restricted to the epidemiologist and admin roles."
+        action={{ to: "/login", label: "Sign in to continue", primary: true }}
+      />
     );
   }
   if (rolesError) {
@@ -117,25 +99,16 @@ function Intake() {
   }
   if (!isClinician) {
     return (
-      <div className="p-12 max-w-md mx-auto text-center">
-        <div className="bg-card border border-border rounded-lg p-8">
-          <ClipboardCheck className="size-10 mx-auto mb-3 text-primary" />
-          <h2 className="font-bold text-[15px]">Insufficient privileges</h2>
-          <p className="text-[12.5px] text-muted-foreground mt-1.5">
-            Case submission is restricted to admin and epidemiologist roles.
-          </p>
-          <Link
-            to="/"
-            className="mt-5 inline-flex items-center gap-1.5 px-4 h-10 rounded-md text-[13px] font-semibold border border-input hover:bg-muted"
-          >
-            Back to dashboard
-          </Link>
-        </div>
-      </div>
+      <GateCard
+        icon={ClipboardCheck}
+        title="Insufficient privileges"
+        body="Case submission is restricted to admin and epidemiologist roles."
+        action={{ to: "/", label: "Back to dashboard" }}
+      />
     );
   }
 
-  const upd = <K extends keyof FormState>(k: K, v: FormState[K]) =>
+  const upd = <K extends keyof IntakeForm>(k: K, v: IntakeForm[K]) =>
     setForm((f) => ({ ...f, [k]: v }));
 
   const handleRegionChange = (regionName: string) => {

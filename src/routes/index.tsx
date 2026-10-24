@@ -9,13 +9,14 @@ import { Skeleton } from "@/components/Skeleton";
 import { Activity, Rat, ShieldAlert, FlaskConical } from "lucide-react";
 import { useCases, useRodents } from "@/hooks/use-surveillance";
 import { useNow } from "@/hooks/use-now";
+import { DAY_MS } from "@/lib/time";
 
 export const Route = createFileRoute("/")({ component: Dashboard });
 
 function bucketByDay(items: { date: string }[], days: number, now: number) {
   const out = new Array<number>(days).fill(0);
   for (const item of items) {
-    const d = Math.floor((now - +new Date(item.date)) / 86400000);
+    const d = Math.floor((now - +new Date(item.date)) / DAY_MS);
     if (d >= 0 && d < days) out[days - 1 - d]++;
   }
   return out;
@@ -46,7 +47,7 @@ function Dashboard() {
 
   const metrics = useMemo(() => {
     const inWindow = (iso: string, minDays: number, maxDays: number) => {
-      const d = (now - +new Date(iso)) / 86400000;
+      const d = (now - +new Date(iso)) / DAY_MS;
       return d > minDays && d <= maxDays;
     };
     // null = no prior baseline (prev window empty), rendered as "New".

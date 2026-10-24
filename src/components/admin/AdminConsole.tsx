@@ -1,6 +1,6 @@
 import { ServerCog, Database, Cpu, Lock, ShieldCheck, Zap, type LucideIcon } from "lucide-react";
 import { useInfra } from "@/hooks/use-infra";
-import { relativeTime } from "@/lib/time";
+import { relativeTime, HOUR_MS } from "@/lib/time";
 import { QueryError } from "@/components/QueryError";
 import { Skeleton } from "@/components/Skeleton";
 import { LatencyChart, LatencyChartSkeleton } from "@/components/admin/LatencyChart";
@@ -23,7 +23,7 @@ export default function AdminConsole() {
     db?.poolMax != null && db.poolUsed != null ? `${db.poolUsed}/${db.poolMax}` : "n/a";
   const successAge = cron?.lastSuccessAt ? Date.now() - +new Date(cron.lastSuccessAt) : Infinity;
   const engineTone =
-    cron === null ? "warn" : cron.successRate >= 95 && successAge < 60 * 60 * 1000 ? "ok" : "warn";
+    cron === null ? "warn" : cron.successRate >= 95 && successAge < HOUR_MS ? "ok" : "warn";
   const cronTone = cron === null ? "warn" : cron.successRate >= 95 ? "ok" : "warn";
   const latencyTone = db === null ? "warn" : db.p95Latency <= 220 ? "ok" : "warn";
   const engineValue = engineTone === "ok" ? "Healthy" : cron === null ? "No data" : "Degraded";
