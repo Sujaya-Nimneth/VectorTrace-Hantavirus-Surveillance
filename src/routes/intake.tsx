@@ -16,6 +16,7 @@ import {
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 import { Step2Clinical } from "@/components/Step2Clinical";
+import { QueryError } from "@/components/QueryError";
 import { useAuth } from "@/hooks/use-auth";
 import { useRoles } from "@/hooks/use-roles";
 import { supabase } from "@/integrations/supabase/client";
@@ -52,7 +53,7 @@ const DEFAULT_FORM: FormState = DEFAULT_INTAKE_FORM;
 
 function Intake() {
   const { user, loading } = useAuth();
-  const { isClinician, loading: rolesLoading } = useRoles();
+  const { isClinician, error: rolesError, loading: rolesLoading } = useRoles();
   const navigate = useNavigate();
   const queryClient = useQueryClient();
   const [step, setStep] = useState(1);
@@ -91,6 +92,13 @@ function Intake() {
             <LogIn className="size-4" /> Sign in to continue
           </Link>
         </div>
+      </div>
+    );
+  }
+  if (rolesError) {
+    return (
+      <div className="p-12 max-w-md mx-auto">
+        <QueryError what="your roles" error={rolesError} onRetry={() => window.location.reload()} />
       </div>
     );
   }
