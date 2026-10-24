@@ -30,6 +30,8 @@ const labels: Record<string, string> = {
   "/admin": "System Infrastructure",
 };
 
+const ALERTS_READ_KEY = "vectortrace_alerts_last_read";
+
 export type MapFocusTarget =
   | { type: "case"; id: string; lat: number; lng: number }
   | { type: "rodent"; id: string; lat: number; lng: number }
@@ -49,7 +51,30 @@ export function TopBar({ onOpenMenu }: { onOpenMenu?: () => void }) {
 
   const [userMenuOpen, setUserMenuOpen] = useState(false);
   const [alertsOpen, setAlertsOpen] = useState(false);
-  const [unreadAlerts, setUnreadAlerts] = useState(true);
+  // Unread = any alert newer than the last time the dropdown was opened.
+  // Persisted so the bell dot survives refreshes instead of resetting.
+  const [alertsReadAt, setAlertsReadAt] = useState<number>(() => {
+    try {
+      const v = Number(localStorage.getItem(ALERTS_READ_KEY));
+      return Number.isFinite(v) && v > 0 ? v : 0;
+    } catch {
+      return 0;
+    }
+  });
+  const openAlerts = () => {
+    const next = !alertsOpen;
+    setAlertsOpen(next);
+    if (next) {
+      const now = Date.now();
+      setAlertsReadAt(now);
+      try {
+        localStorage.setItem(ALERTS_READ_KEY, String(now));
+      } catch {
+        // Storage unavailable: read state lasts for this session only.
+      }
+    }
+  };
+  const unreadAlerts = alerts.some((a) => +new Date(a.createdAt) > alertsReadAt);
   const [query, setQuery] = useState("");
   const [searchOpen, setSearchOpen] = useState(false);
 
@@ -308,10 +333,7 @@ export function TopBar({ onOpenMenu }: { onOpenMenu?: () => void }) {
       <div ref={alertsRef} className="relative">
         <button
           type="button"
-          onClick={() => {
-            setAlertsOpen((o) => !o);
-            setUnreadAlerts(false);
-          }}
+          onClick={openAlerts}
           aria-label="View surveillance alerts"
           aria-haspopup="dialog"
           aria-expanded={alertsOpen}
