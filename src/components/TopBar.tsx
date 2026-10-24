@@ -35,9 +35,6 @@ export type MapFocusTarget =
   | { type: "rodent"; id: string; lat: number; lng: number }
   | { type: "region"; name: string; lat: number; lng: number };
 
-export const MAP_FOCUS_STORAGE_KEY = "vectortrace_map_focus";
-export const MAP_FOCUS_EVENT = "vectortrace:map-focus";
-
 export function TopBar({ onOpenMenu }: { onOpenMenu?: () => void }) {
   const path = useRouterState({ select: (s) => s.location.pathname });
   const label = labels[path] ?? "VectorTrace";
@@ -113,15 +110,16 @@ export function TopBar({ onOpenMenu }: { onOpenMenu?: () => void }) {
     searchResults.rodents.length > 0;
 
   const focusOnMap = (target: MapFocusTarget) => {
-    try {
-      sessionStorage.setItem(MAP_FOCUS_STORAGE_KEY, JSON.stringify(target));
-      window.dispatchEvent(new CustomEvent(MAP_FOCUS_EVENT, { detail: target }));
-    } catch {
-      // ignore storage errors
-    }
     setSearchOpen(false);
     setQuery("");
-    navigate({ to: "/map" });
+    // URL search params keep the focus shareable and back-button navigable.
+    if (target.type === "case") {
+      navigate({ to: "/map", search: { case: target.id } });
+    } else if (target.type === "rodent") {
+      navigate({ to: "/map", search: { site: target.id } });
+    } else {
+      navigate({ to: "/map", search: { region: target.name } });
+    }
   };
 
   const initials = user?.email?.slice(0, 2).toUpperCase() ?? "??";
