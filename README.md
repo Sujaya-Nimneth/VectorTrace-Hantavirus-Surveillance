@@ -1,165 +1,135 @@
-# VectorTrace - Hantavirus Surveillance
+# VectorTrace — Hantavirus Surveillance Command Center
 
-VectorTrace is a real-time epidemiological dashboard for hantavirus surveillance. It combines a command-center UI, geospatial tracking, and rapid case intake with a Supabase-backed data layer and role-based access control. The app also includes an admin-only infrastructure console that surfaces system health signals for the ingestion pipeline.
+[![CI & Deploy](https://github.com/Sujaya-Nimneth/hanta-watch-central/actions/workflows/deploy.yml/badge.svg)](https://github.com/Sujaya-Nimneth/hanta-watch-central/actions/workflows/deploy.yml)
+[![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
+[![Node](https://img.shields.io/badge/node-20+-339933?logo=node.js&logoColor=white)](.nvmrc)
 
-## Key features
+**VectorTrace** is a real-time epidemiological surveillance platform for hantavirus. It combines a command-center dashboard, geospatial risk mapping, a role-gated rapid case intake workflow, and an automated WHO Disease Outbreak News ingestion pipeline — backed by Supabase (Postgres + RLS + Edge Functions) and deployed to Cloudflare Workers.
 
-- Executive dashboard with live metrics, epidemic curve, alerts, and risk ranking.
-- Geospatial map view for field intelligence and hotspot tracking.
-- Rapid case intake workflow for clinician submissions (symptoms + exposure notes persisted).
-- Admin-only infrastructure console for health and observability signals.
-- Supabase Auth + RLS with explicit roles (admin, epidemiologist, viewer).
-- Public read access to surveillance data with authenticated writes.
-- Demo mode: with `VITE_DEMO_MODE=true` (or when Supabase credentials are unset) the app serves a bundled mock dataset and shows a "Demo data" badge, so the UI renders without a backend.
+| Dashboard (dark) | Dashboard (light) | Geospatial tracker |
+| :---: | :---: | :---: |
+| ![Dashboard in dark mode](docs/screenshots/dashboard-dark.png) | ![Dashboard in light mode](docs/screenshots/dashboard-light.png) | ![Geospatial tracker](docs/screenshots/map-dark.png) |
 
-## App routes
+## Highlights
 
-- `/` Executive Dashboard
-- `/map` Geospatial Tracker
-- `/intake` Rapid Case Intake (authenticated)
-- `/admin` System Infrastructure (admin-only)
-- `/login` Sign in / signup
+- **Executive dashboard** — live case metrics with trend deltas, stacked epidemic curve (7/30/90-day windows), severity-filtered alerts feed, and a regional risk ranking with sorting, filtering, and CSV export.
+- **Geospatial tracker** — Leaflet map with case markers, rodent reservoir sites, a case-density heat layer with legend, and shareable focus URLs (`/map?case=…`).
+- **Rapid case intake** — 4-step clinician workflow (demographics → clinical → exposure → review) with zod validation against controlled vocabularies, local drafts, and optimistic cache updates.
+- **Role-based access** — Supabase Auth with `admin` / `epidemiologist` / `viewer` roles enforced by Postgres RLS (the UI gates are convenience; the database is the enforcement layer).
+- **Automated ingestion** — a Supabase Edge Function scrapes WHO Disease Outbreak News via Firecrawl on a pg_cron schedule, normalizes and dedupes items, updates case statuses across runs, and raises alerts on confirmations.
+- **Admin observability console** — ingest success rates, external feed uptime, DB latency percentiles, and pool telemetry, code-split out of the main bundle.
+- **Demo mode** — with no credentials (or `VITE_DEMO_MODE=true`) the app serves a deterministic bundled dataset so the whole UI runs without a backend. Perfect for local dev and portfolio demos.
+- **Dark mode** — system-aware, persisted, no theme flash.
 
-## Data model and security
+## Architecture
 
-Supabase provides the primary data store with RLS enabled on all surveillance tables. Policies allow public read access while restricting writes to authenticated clinician roles.
+```
+                ┌──────────────────────────────────────────────┐
+                │                Cloudflare Workers            │
+                │  TanStack Start (React 19, SSR) + Vite       │
+                │  ├── /            Executive dashboard        │
+                │  ├── /map         Geospatial tracker (lazy)  │
+                │  ├── /intake      Case intake (clinicians)   │
+                │  └── /admin       Infra console (admin, lazy)│
+                └───────────────┬──────────────────────────────┘
+                                │ Supabase JS (public view / authed RLS)
+                ┌───────────────▼──────────────────────────────┐
+                │                  Supabase                    │
+                │  Postgres + RLS ── hanta_cases (+ public      │
+                │  projection), rodent_sites, hanta_alerts,    │
+                │  user_roles, infra_* telemetry               │
+                │  Realtime ── live INSERT push to the UI      │
+                │                                              │
+                │  Edge Functions (Deno)                       │
+                │  ├── ingest-don-feed ── WHO DON via Firecrawl│
+                │  └── infra-health-check ── uptime + DB probe │
+                │        ▲ scheduled by pg_cron every 5 min /  │
+                │          twice daily, fail-closed bearer auth│
+                └──────────────────────────────────────────────┘
+```
 
-Roles are managed through the `user_roles` table and enforced via RLS policies and UI gates:
+**Data minimization:** anonymous visitors read only the `hanta_cases_public` view — clinical columns (age, sex, symptoms, exposure narrative) are restricted to authenticated readers by RLS.
 
-- `admin` can manage roles and access the infrastructure console.
-- `epidemiologist` can insert and update clinical data.
-- `viewer` has read-only access.
+## Tech stack
 
-The first user to sign up is auto-granted `admin`; subsequent users receive `viewer` by default.
+| Layer | Choices |
+| --- | --- |
+| UI | React 19, TanStack Start + Router, Tailwind CSS 4, lucide-react, sonner |
+| Data | TanStack Query v5, Supabase JS v2, Realtime channels, zod |
+| Visualization | Recharts (epidemic curve, latency), Leaflet + leaflet.heat (map) |
+| Backend | Supabase Postgres with RLS, Edge Functions (Deno), pg_cron |
+| Infra | Cloudflare Workers (wrangler), Docker + Nginx (self-host parity), GitHub Actions |
 
-## Ingestion pipeline
-
-A Supabase Edge Function (`ingest-don-feed`) pulls WHO Disease Outbreak News using Firecrawl and writes normalized rows into `hanta_cases` and `hanta_alerts`. The function is intended to be scheduled via `pg_cron`.
-
-Each ingest run is logged in `infra_ingest_runs` with success/failure status, runtime, and record counts. These logs back the admin infrastructure console.
-
-## Infrastructure health + observability
-
-The admin console reads live metrics from three observability tables:
-
-- `infra_ingest_runs` for cron success rate and last successful run.
-- `infra_api_uptime` for external API status checks (`Firecrawl`, `WHO Disease Outbreak News`, `Supabase REST`).
-- `infra_db_metrics` for database latency and connection pool health snapshots.
-
-The `infra-health-check` Edge Function can be scheduled to refresh uptime and database metrics continuously.
-
-Cron schedules (configured via migration):
-
-- `ingest_don_twice_daily` at 02:00 and 14:00 UTC.
-- `infra_health_check` every 5 minutes.
-
-## Environment variables
-
-Create a `.env` file in the project root. Client-side values must be prefixed with `VITE_`.
-
-Required variables:
-
-- `VITE_SUPABASE_URL`
-- `VITE_SUPABASE_PUBLISHABLE_KEY`
-- `SUPABASE_URL`
-- `SUPABASE_PUBLISHABLE_KEY`
-- `SUPABASE_SERVICE_ROLE_KEY` (server-only)
-- `FIRECRAWL_API_KEY` (edge function only, set via `supabase secrets set`)
-- `INGEST_TOKEN` (required on edge functions — they fail closed without it)
-- `VITE_DEMO_MODE` (optional, `true` forces the bundled demo dataset)
-- `INGEST_URL` (Docker scheduler: Supabase edge function URL)
-- `HEALTHCHECK_URL` (Docker scheduler: infra health-check URL)
-- `INGEST_INTERVAL_SECONDS` (optional, default 43200)
-- `HEALTHCHECK_INTERVAL_SECONDS` (optional, default 300)
-
-Never commit secrets. Use your deployment platform's secret manager for production values.
-
-## Local development
+## Quick start
 
 ```bash
 npm install
 npm run dev
 ```
 
-Quality checks:
+That's it — without credentials the app boots in demo mode with a bundled dataset.
+
+To connect a backend, create a `.env` from [`.env.example`](.env.example):
+
+- `VITE_SUPABASE_URL`, `VITE_SUPABASE_PUBLISHABLE_KEY` — client
+- `SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY` — server-only
+- `FIRECRAWL_API_KEY`, `INGEST_TOKEN` — edge function secrets (`supabase secrets set`)
+
+### Quality gates
 
 ```bash
-npm run lint
-npm run typecheck
-npm test
-```
-
-## Docker (IaC)
-
-Build and run the web app with Docker Compose:
-
-```bash
-docker compose up --build
-```
-
-Services:
-
-- `web`: Vite + TanStack Start app (served via Nginx).
-- `nginx`: reverse proxy (gzip, asset caching, security headers).
-
-The `scraper` scheduler is opt-in via a compose profile — pg_cron (configured by the migrations) is the default scheduler, and running both would duplicate ingest runs and metric rows:
-
-```bash
-docker compose --profile scheduler up
-```
-
-Set these in your `.env` for the scraper:
-
-- `INGEST_URL` = `https://<SUPABASE_PROJECT>.supabase.co/functions/v1/ingest-don-feed`
-- `HEALTHCHECK_URL` = `https://<SUPABASE_PROJECT>.supabase.co/functions/v1/infra-health-check`
-- `INGEST_TOKEN` matching the edge function secret.
-
-Build and preview:
-
-```bash
-npm run build
-npm run preview
+npm run lint          # eslint + prettier
+npm run typecheck     # tsc --noEmit
+npm run test          # vitest (unit)
+npm run test:coverage # vitest + v8 coverage report
+npm run build         # production build
 ```
 
 ## Supabase setup
 
-1. Create a Supabase project.
-2. Apply the SQL migrations in `supabase/migrations`.
-3. Configure the Edge Function in `supabase/functions/ingest-don-feed`.
-4. Deploy the `infra-health-check` Edge Function.
-5. Add the required secrets in Supabase (and local `.env` for dev).
-6. Set scheduler config values:
+1. Create a Supabase project and apply the migrations in `supabase/migrations/` in order.
+2. Deploy the edge functions in `supabase/functions/` and set their secrets.
+3. Schedule them via the `infra_config` values created by the cron migration:
+
    ```sql
    insert into public.infra_config (key, value)
    values
-   	 ('supabase_functions_base_url', 'https://<PROJECT_REF>.supabase.co/functions/v1'),
-   	 ('ingest_token', '<YOUR_TOKEN>'),
-   	 ('healthcheck_token', '<YOUR_TOKEN>')
+     ('supabase_functions_base_url', 'https://<PROJECT_REF>.supabase.co/functions/v1'),
+     ('ingest_token', '<YOUR_TOKEN>'),
+     ('healthcheck_token', '<YOUR_TOKEN>')
    on conflict (key) do update set value = excluded.value;
    ```
 
-## Tech stack
+The first user to sign up is auto-granted `admin`; everyone after gets `viewer`.
 
-- React + TanStack Router + TanStack Start
-- Vite + Tailwind CSS
-- Supabase Auth, RLS, and Edge Functions
-- Recharts and Leaflet for visualizations
+## Roles & security model
+
+| Role | Capabilities |
+| --- | --- |
+| `admin` | Everything + role management + infrastructure console |
+| `epidemiologist` | Insert/update clinical cases and alerts |
+| `viewer` (default) | Read surveillance data |
+| anonymous | Public projection only (no clinical columns), no writes |
+
+Security posture: RLS on every table with `WITH CHECK` clauses, check constraints on coordinates/age/positivity, constant-time bearer auth on edge functions (fail-closed without the token), query-cache wipe on sign-out, CSP + security headers in the Nginx config. See [SECURITY.md](SECURITY.md).
+
+## Docker (optional self-host parity)
+
+```bash
+docker compose up --build          # web + nginx
+docker compose --profile scheduler up   # opt-in Docker scheduler (pg_cron is the default)
+```
 
 ## CI/CD
 
-GitHub Actions runs lint, typecheck, tests, and a build on every pull request, and deploys to **Cloudflare Workers** on every push to `main` (`npx wrangler deploy` using the worker config emitted by `@cloudflare/vite-plugin` into `dist/server`).
-
-Configure the following repository secrets:
-
-- `CLOUDFLARE_API_TOKEN`
-- `CLOUDFLARE_ACCOUNT_ID`
-- `VITE_SUPABASE_URL`
-- `VITE_SUPABASE_PUBLISHABLE_KEY`
-
-Set the worker's server-side secrets with `npx wrangler secret put <NAME>` if you use them (e.g. `SUPABASE_URL`, `SUPABASE_PUBLISHABLE_KEY`).
+GitHub Actions runs lint, typecheck, tests with coverage, and a build on every PR, then deploys to **Cloudflare Workers** on pushes to `main` (wrangler pinned in devDependencies; deploy reuses the verified build artifact). Configure the repository secrets listed in `.env.example` plus `CLOUDFLARE_API_TOKEN` / `CLOUDFLARE_ACCOUNT_ID`.
 
 ## Roadmap
 
-- Add long-term SLA reporting and alerting for ingest failures.
-- Expand API uptime checks with provider-specific health endpoints.
-- Automate scheduled invocations via Supabase cron tasks.
+- Long-term SLA reporting and alerting for ingest failures
+- Provider-specific health endpoints for uptime checks
+- Marker clustering and seasonal-trend analytics on the map
+
+## License
+
+[MIT](LICENSE) © Sujaya Nimneth
