@@ -129,7 +129,9 @@ function normalizeItem(
     it.case_id?.trim() ||
     it.external_id?.trim() ||
     stableCaseId(
-      reportedAtDefaulted ? `${region}|${it.summary ?? ""}` : `${region}|${reportedAt}|${it.summary ?? ""}`,
+      reportedAtDefaulted
+        ? `${region}|${it.summary ?? ""}`
+        : `${region}|${reportedAt}|${it.summary ?? ""}`,
     );
 
   return {
@@ -161,10 +163,9 @@ Deno.serve(async (req) => {
     const supabaseUrl = Deno.env.get("SUPABASE_URL");
     const supabaseKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
     if (!supabaseUrl || !supabaseKey) {
-      return new Response(
-        "SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY secrets must both be set",
-        { status: 500 },
-      );
+      return new Response("SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY secrets must both be set", {
+        status: 500,
+      });
     }
     supabase = createClient(supabaseUrl, supabaseKey);
 
@@ -175,57 +176,57 @@ Deno.serve(async (req) => {
     }
 
     const scrapeBody = JSON.stringify({
-        url: SOURCE_URL,
-        formats: [
-          "markdown",
-          {
-            type: "json",
-            schema: {
-              type: "object",
-              properties: {
+      url: SOURCE_URL,
+      formats: [
+        "markdown",
+        {
+          type: "json",
+          schema: {
+            type: "object",
+            properties: {
+              items: {
+                type: "array",
                 items: {
-                  type: "array",
-                  items: {
-                    type: "object",
-                    properties: {
-                      case_id: {
-                        type: "string",
-                        description:
-                          "A unique identifier for the DON item, e.g. slug or URL path segment",
-                      },
-                      region: { type: "string", description: "Country or region name" },
-                      lat: { type: "number", description: "Approximate latitude of the region" },
-                      lng: { type: "number", description: "Approximate longitude of the region" },
-                      reported_at: {
-                        type: "string",
-                        description: "Date of the report in ISO 8601 format",
-                      },
-                      syndrome: {
-                        type: "string",
-                        enum: ["HPS", "HFRS"],
-                        description: "Hantavirus syndrome type",
-                      },
-                      status: {
-                        type: "string",
-                        enum: ["Confirmed", "Suspected", "Pending"],
-                        description: "Case status",
-                      },
-                      summary: {
-                        type: "string",
-                        description: "Brief summary of the outbreak news item",
-                      },
+                  type: "object",
+                  properties: {
+                    case_id: {
+                      type: "string",
+                      description:
+                        "A unique identifier for the DON item, e.g. slug or URL path segment",
                     },
-                    required: ["case_id", "region", "reported_at"],
+                    region: { type: "string", description: "Country or region name" },
+                    lat: { type: "number", description: "Approximate latitude of the region" },
+                    lng: { type: "number", description: "Approximate longitude of the region" },
+                    reported_at: {
+                      type: "string",
+                      description: "Date of the report in ISO 8601 format",
+                    },
+                    syndrome: {
+                      type: "string",
+                      enum: ["HPS", "HFRS"],
+                      description: "Hantavirus syndrome type",
+                    },
+                    status: {
+                      type: "string",
+                      enum: ["Confirmed", "Suspected", "Pending"],
+                      description: "Case status",
+                    },
+                    summary: {
+                      type: "string",
+                      description: "Brief summary of the outbreak news item",
+                    },
                   },
+                  required: ["case_id", "region", "reported_at"],
                 },
               },
-              required: ["items"],
             },
+            required: ["items"],
           },
-        ],
-        onlyMainContent: true,
-        timeout: 120000,
-      });
+        },
+      ],
+      onlyMainContent: true,
+      timeout: 120000,
+    });
 
     // Retry transient Firecrawl failures (429/5xx) with exponential backoff;
     // a single blip should not fail the whole ingest run.
@@ -252,7 +253,8 @@ Deno.serve(async (req) => {
       return new Response(`scrape failed: no response`, { status: 502 });
     }
     if (!scrape.ok) {
-      const errText = scrape.status === 429 || scrape.status >= 500 ? lastErrText : await scrape.text();
+      const errText =
+        scrape.status === 429 || scrape.status >= 500 ? lastErrText : await scrape.text();
       return new Response(`scrape failed: ${scrape.status} – ${errText}`, { status: 502 });
     }
 
