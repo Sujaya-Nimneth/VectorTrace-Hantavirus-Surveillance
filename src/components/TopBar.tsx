@@ -24,7 +24,8 @@ import { isDemoMode } from "@/lib/demo-mode";
 import { relativeTime } from "@/lib/time";
 
 const labels: Record<string, string> = {
-  "/": "Executive Dashboard",
+  "/": "VectorTrace",
+  "/dashboard": "Executive Dashboard",
   "/map": "Geospatial Tracker",
   "/intake": "Rapid Case Intake",
   "/admin": "System Infrastructure",
