@@ -34,6 +34,18 @@ export function useTheme() {
       : "light",
   );
 
+  // The pre-paint script in the root shell normally applies the theme before
+  // first render, but if hydration re-inserts that script after parse it never
+  // executes — reconcile here as a fallback.
+  useEffect(() => {
+    const resolved = resolveTheme();
+    const isDark = document.documentElement.classList.contains("dark");
+    if ((resolved === "dark") !== isDark) {
+      applyTheme(resolved);
+      setTheme(resolved);
+    }
+  }, []);
+
   // Track system changes while the user hasn't picked an explicit theme.
   useEffect(() => {
     const media = window.matchMedia("(prefers-color-scheme: dark)");
