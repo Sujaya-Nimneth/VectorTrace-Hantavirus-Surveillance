@@ -27,15 +27,17 @@ export function MetricCard({
 }: {
   label: string;
   value: string;
-  delta: number;
+  /** null = no prior baseline (first period with data) — rendered as "New". */
+  delta: number | null;
   tone: Tone;
   icon: LucideIcon;
   spark: number[];
   invertDelta?: boolean;
 }) {
   const isZero = delta === 0;
-  const up = delta > 0;
-  const isBad = invertDelta ? delta < 0 : delta > 0;
+  const isNew = delta == null;
+  const up = (delta ?? 0) > 0;
+  const isBad = invertDelta ? (delta ?? 0) < 0 : (delta ?? 0) > 0;
 
   return (
     <div
@@ -60,21 +62,28 @@ export function MetricCard({
         <div
           className={cn(
             "inline-flex items-center gap-0.5 text-[11px] font-semibold px-1.5 py-0.5 rounded",
-            isZero
-              ? "text-muted-foreground bg-muted"
-              : isBad
-                ? "text-alert bg-alert/10"
-                : "text-success bg-success/10",
+            isNew
+              ? "text-info bg-info/10"
+              : isZero
+                ? "text-muted-foreground bg-muted"
+                : isBad
+                  ? "text-alert bg-alert/10"
+                  : "text-success bg-success/10",
           )}
         >
-          {isZero ? (
-            <Minus className="size-3" />
-          ) : up ? (
-            <ArrowUpRight className="size-3" />
+          {isNew ? (
+            "New"
+          ) : isZero ? (
+            <>
+              <Minus className="size-3" />
+              0% 30d
+            </>
           ) : (
-            <ArrowDownRight className="size-3" />
+            <>
+              {up ? <ArrowUpRight className="size-3" /> : <ArrowDownRight className="size-3" />}
+              {Math.abs(delta)}% 30d
+            </>
           )}
-          {Math.abs(delta)}% 30d
         </div>
         <Sparklines data={spark} tone={tone} />
       </div>
