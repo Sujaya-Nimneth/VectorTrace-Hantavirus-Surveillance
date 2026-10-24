@@ -7,7 +7,7 @@ The `main` branch receives security fixes.
 ## Reporting a vulnerability
 
 Please report suspected vulnerabilities privately via
-[GitHub security advisories](https://github.com/Sujaya-Nimneth/hanta-watch-central/security/advisories/new)
+[GitHub security advisories](https://github.com/Sujaya-Nimneth/VectorTrace-Hantavirus-Surveillance/security/advisories/new)
 rather than opening a public issue. Include reproduction steps and, where
 possible, a suggested fix. You should hear back within a few days.
 

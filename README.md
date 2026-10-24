@@ -1,6 +1,6 @@
 # VectorTrace — Hantavirus Surveillance Command Center
 
-[![CI & Deploy](https://github.com/Sujaya-Nimneth/hanta-watch-central/actions/workflows/deploy.yml/badge.svg)](https://github.com/Sujaya-Nimneth/hanta-watch-central/actions/workflows/deploy.yml)
+[![CI & Deploy](https://github.com/Sujaya-Nimneth/VectorTrace-Hantavirus-Surveillance/actions/workflows/deploy.yml/badge.svg)](https://github.com/Sujaya-Nimneth/VectorTrace-Hantavirus-Surveillance/actions/workflows/deploy.yml)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 [![Node](https://img.shields.io/badge/node-20+-339933?logo=node.js&logoColor=white)](.nvmrc)
 <!-- Update the href with your workers.dev account subdomain after the first deploy -->
