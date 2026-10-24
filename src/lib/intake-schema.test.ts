@@ -30,4 +30,34 @@ describe("intakeSchema", () => {
       intakeSchema.safeParse({ ...DEFAULT_INTAKE_FORM, onsetDate: "2026-10-01" }).success,
     ).toBe(true);
   });
+
+  it("rejects future onset dates", () => {
+    const res = intakeSchema.safeParse({ ...DEFAULT_INTAKE_FORM, onsetDate: "2999-01-01" });
+    expect(res.success).toBe(false);
+    if (!res.success) {
+      expect(res.error.issues[0].message).toBe("Onset date cannot be in the future");
+    }
+  });
+
+  it("rejects regions outside the known surveillance regions", () => {
+    expect(intakeSchema.safeParse({ ...DEFAULT_INTAKE_FORM, region: "Atlantis" }).success).toBe(
+      false,
+    );
+  });
+
+  it("rejects symptoms outside the clinical vocabulary", () => {
+    expect(
+      intakeSchema.safeParse({ ...DEFAULT_INTAKE_FORM, symptoms: ["fever", "sneezing"] }).success,
+    ).toBe(false);
+  });
+
+  it("treats whitespace-only age as empty instead of coercing it to 0", () => {
+    expect(intakeSchema.safeParse({ ...DEFAULT_INTAKE_FORM, age: " " }).success).toBe(true);
+  });
+
+  it("rejects exposure notes beyond 2000 characters", () => {
+    expect(
+      intakeSchema.safeParse({ ...DEFAULT_INTAKE_FORM, exposure: "x".repeat(2001) }).success,
+    ).toBe(false);
+  });
 });
