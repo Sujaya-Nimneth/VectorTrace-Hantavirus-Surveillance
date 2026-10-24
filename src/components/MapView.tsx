@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState, memo } from "react";
+import { useEffect, useMemo, useRef, useState, useCallback, memo } from "react";
 import {
   MapContainer,
   TileLayer,
@@ -12,11 +12,11 @@ import L from "leaflet";
 import "leaflet.heat";
 import { useCases, useRodents } from "@/hooks/use-surveillance";
 import { useNow } from "@/hooks/use-now";
-import type { Case, RodentSite } from "@/lib/mock-data";
+import { REGIONS, type Case, type RodentSite } from "@/lib/mock-data";
 import { Layers, Calendar, X, MapPin, AlertTriangle, Rat, Activity, Loader2 } from "lucide-react";
+import { useNavigate, useSearch } from "@tanstack/react-router";
 import { cn } from "@/lib/utils";
 import { QueryError } from "@/components/QueryError";
-import { MAP_FOCUS_EVENT, MAP_FOCUS_STORAGE_KEY, type MapFocusTarget } from "@/components/TopBar";
 
 type HeatLayerInstance = L.Layer & {
   setLatLngs: (latlngs: [number, number, number][]) => HeatLayerInstance;
@@ -79,20 +79,27 @@ function MapController({
   points,
   range,
   cases,
+  rodents,
   onSelectCase,
 }: {
   points: [number, number][];
   range: number;
   cases: Case[];
+  rodents: RodentSite[];
   onSelectCase: (c: Case) => void;
 }) {
   const map = useMap();
   const fittedRangeRef = useRef<number | null>(null);
+  // Focus targets arrive as URL search params (?case= / ?site= / ?region=),
+  // so deep links are shareable and survive refresh.
+  const search = useSearch({ strict: false }) as { case?: string; site?: string; region?: string };
 
-  // Refs so the focus listener below registers once instead of re-subscribing
-  // every time the cases array changes.
+  // Refs so the focus effect below registers once instead of re-subscribing
+  // every time the data arrays change.
   const casesRef = useRef(cases);
   casesRef.current = cases;
+  const rodentsRef = useRef(rodents);
+  rodentsRef.current = rodents;
   const selectRef = useRef(onSelectCase);
   selectRef.current = onSelectCase;
 
@@ -107,40 +114,31 @@ function MapController({
     }
   }, [map, points, range]);
 
+  const focusKey = `${search.case ?? ""}|${search.site ?? ""}|${search.region ?? ""}`;
+  const hasFocus = focusKey.replace(/\|/g, "").length > 0;
   useEffect(() => {
-    const applyFocus = (target: MapFocusTarget) => {
-      try {
-        map.flyTo([target.lat, target.lng], target.type === "region" ? 6 : 8, {
-          duration: 0.8,
-        });
-        if (target.type === "case") {
-          const found = casesRef.current.find((c) => c.id === target.id);
-          if (found) selectRef.current(found);
-        }
-      } catch {
-        /* ignore */
-      }
-    };
-
+    if (!hasFocus) return;
     try {
-      const raw = sessionStorage.getItem(MAP_FOCUS_STORAGE_KEY);
-      if (raw) {
-        sessionStorage.removeItem(MAP_FOCUS_STORAGE_KEY);
-        const parsed = JSON.parse(raw) as MapFocusTarget;
-        applyFocus(parsed);
+      if (search.case) {
+        const found = casesRef.current.find((c) => c.id === search.case);
+        if (found) {
+          map.flyTo([found.lat, found.lng], 8, { duration: 0.8 });
+          selectRef.current(found);
+        }
+      } else if (search.site) {
+        const site = rodentsRef.current.find((r) => r.id === search.site);
+        if (site) map.flyTo([site.lat, site.lng], 8, { duration: 0.8 });
+      } else if (search.region) {
+        const region = REGIONS.find((r) => r.name === search.region);
+        if (region) map.flyTo([region.lat, region.lng], 6, { duration: 0.8 });
       }
+      // Focus should win over the initial fitBounds once a target exists.
+      fittedRangeRef.current = range;
     } catch {
       /* ignore */
     }
-
-    const onCustomFocus = (e: Event) => {
-      const detail = (e as CustomEvent<MapFocusTarget>).detail;
-      if (detail) applyFocus(detail);
-    };
-
-    window.addEventListener(MAP_FOCUS_EVENT, onCustomFocus);
-    return () => window.removeEventListener(MAP_FOCUS_EVENT, onCustomFocus);
-  }, [map]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [focusKey, map, range]);
 
   return null;
 }
@@ -213,6 +211,7 @@ export default function MapView() {
     refetch: refetchRodents,
   } = useRodents();
   const now = useNow();
+  const navigate = useNavigate({ from: "/map" });
   const loadError = casesError ?? rodentsError ?? null;
   const loading = casesLoading || rodentsLoading;
 
@@ -243,14 +242,20 @@ export default function MapView() {
   }, [selected, RODENTS]);
 
   // Escape closes the case detail drawer.
+  const closeDrawer = useCallback(() => {
+    setSelected(null);
+    // Drop the ?case= focus param so the URL matches the closed drawer.
+    navigate({ search: {} });
+  }, [navigate]);
+
   useEffect(() => {
     if (!selected) return;
     const onKey = (e: KeyboardEvent) => {
-      if (e.key === "Escape") setSelected(null);
+      if (e.key === "Escape") closeDrawer();
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [selected]);
+  }, [selected, closeDrawer]);
 
   return (
     <div className="relative h-full w-full bg-map-canvas">
@@ -287,7 +292,13 @@ export default function MapView() {
               attribution="&copy; OpenStreetMap, &copy; CARTO"
               url="https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png"
             />
-            <MapController points={points} range={range} cases={CASES} onSelectCase={setSelected} />
+            <MapController
+              points={points}
+              range={range}
+              cases={CASES}
+              rodents={RODENTS}
+              onSelectCase={setSelected}
+            />
             {layers.density && heatPoints.length > 0 && <HeatLayer points={heatPoints} />}
             {layers.cases &&
               visibleCases.map((c, i) => (
@@ -357,6 +368,21 @@ export default function MapView() {
             </div>
           </div>
 
+          {/* Heat density legend */}
+          <div
+            className="absolute bottom-4 right-4 z-[400] bg-map-panel/95 backdrop-blur border border-white/10 rounded-lg px-3 py-2.5 shadow-xl text-white"
+            aria-hidden="true"
+          >
+            <div className="text-[10px] uppercase tracking-wider text-white/60 mb-1.5">
+              Case density
+            </div>
+            <div className="h-2 w-32 rounded-full bg-gradient-to-r from-[#fbbf24] via-[#f97316] to-[#dc2626]" />
+            <div className="flex justify-between text-[10px] text-white/60 mt-1">
+              <span>Low</span>
+              <span>High</span>
+            </div>
+          </div>
+
           {/* Empty state: data loaded but nothing in range */}
           {visibleCases.length === 0 && visibleRodents.length === 0 && (
             <div className="absolute top-4 left-1/2 -translate-x-1/2 z-[400] bg-map-panel/95 backdrop-blur border border-white/10 rounded-lg px-4 py-2.5 text-white/80 text-[12px] flex items-center gap-2 shadow-xl">
@@ -378,7 +404,7 @@ export default function MapView() {
                 </div>
                 <button
                   type="button"
-                  onClick={() => setSelected(null)}
+                  onClick={closeDrawer}
                   aria-label="Close case details"
                   className="p-1.5 rounded hover:bg-white/10"
                 >
