@@ -3,8 +3,14 @@
 [![CI & Deploy](https://github.com/Sujaya-Nimneth/hanta-watch-central/actions/workflows/deploy.yml/badge.svg)](https://github.com/Sujaya-Nimneth/hanta-watch-central/actions/workflows/deploy.yml)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 [![Node](https://img.shields.io/badge/node-20+-339933?logo=node.js&logoColor=white)](.nvmrc)
+<!-- Update the href with your workers.dev account subdomain after the first deploy -->
+[![Live Demo](https://img.shields.io/badge/live-demo-ff5722?logo=cloudflareworkers&logoColor=white)](https://vectortrace-hantavirus-surveillance.workers.dev)
 
 **VectorTrace** is a real-time epidemiological surveillance platform for hantavirus. It combines a command-center dashboard, geospatial risk mapping, a role-gated rapid case intake workflow, and an automated WHO Disease Outbreak News ingestion pipeline — backed by Supabase (Postgres + RLS + Edge Functions) and deployed to Cloudflare Workers.
+
+**A 15-second tour** — landing page → dashboard (light → dark) → geospatial tracker:
+
+![VectorTrace demo](docs/screenshots/demo.gif)
 
 | Dashboard (dark) | Dashboard (light) | Geospatial tracker |
 | :---: | :---: | :---: |
