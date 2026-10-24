@@ -238,7 +238,7 @@ function Intake() {
                 <button
                   type="button"
                   onClick={() => setStep(s.n)}
-                  className="flex flex-col items-center gap-1.5 group focus:outline-none"
+                  className="flex flex-col items-center gap-1.5 group focus:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 rounded-lg px-2 py-1"
                 >
                   <div
                     className={cn(
