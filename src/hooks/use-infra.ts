@@ -1,7 +1,7 @@
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import type { Tables } from "@/integrations/supabase/types";
-import { formatClock } from "@/lib/time";
+import { formatClock, DAY_MS } from "@/lib/time";
 
 type IngestRun = Tables<"infra_ingest_runs">;
 type ApiUptime = Tables<"infra_api_uptime">;
@@ -44,7 +44,7 @@ export type InfraSnapshot = {
 };
 
 async function fetchInfra(): Promise<InfraSnapshot> {
-  const since = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
+  const since = new Date(Date.now() - 24 * DAY_MS).toISOString();
   const [runsRes, apiRes, dbRes] = await Promise.all([
     supabase
       .from("infra_ingest_runs")
