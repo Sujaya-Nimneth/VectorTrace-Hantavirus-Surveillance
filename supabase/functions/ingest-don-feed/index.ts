@@ -273,20 +273,38 @@ Deno.serve(async (req) => {
       });
     }
 
-    const { data: inserted, error } = await supabase
+    // Fetch current statuses so the upsert can tell new rows apart from
+    // status transitions (a DON item first seen as Suspected that later
+    // becomes Confirmed must update the existing row, not be skipped).
+    const caseIds = cases.map((c) => c.case_id);
+    const { data: existing, error: fetchError } = await supabase
       .from("hanta_cases")
-      .upsert(cases, { onConflict: "case_id", ignoreDuplicates: true })
-      .select("id, region, status");
+      .select("case_id, status")
+      .in("case_id", caseIds);
+    if (fetchError) throw fetchError;
+    const existingStatusById = new Map((existing ?? []).map((r) => [r.case_id, r.status]));
+
+    const { data: upserted, error } = await supabase
+      .from("hanta_cases")
+      .upsert(cases, { onConflict: "case_id" })
+      .select("id, case_id, region, status");
 
     if (error) throw error;
-    ingestedCount = inserted?.length ?? 0;
+    ingestedCount = (upserted ?? []).filter((c) => !existingStatusById.has(c.case_id)).length;
 
-    // Emit a critical alert for every confirmed case ingested in this run.
-    const alerts = (inserted ?? [])
-      .filter((c) => c.status === "Confirmed")
+    // Alert on confirmed cases that are new or just transitioned to Confirmed.
+    const alerts = (upserted ?? [])
+      .filter((c) => {
+        if (c.status !== "Confirmed") return false;
+        const prev = existingStatusById.get(c.case_id);
+        return prev === undefined || prev !== "Confirmed";
+      })
       .map((c) => ({
-        level: "critical",
-        title: `New confirmed hantavirus case ingested from WHO DON`,
+        level: "critical" as const,
+        title:
+          existingStatusById.has(c.case_id) && existingStatusById.get(c.case_id) !== "Confirmed"
+            ? "WHO DON case status changed to Confirmed"
+            : "New confirmed hantavirus case ingested from WHO DON",
         region: c.region,
       }));
     if (alerts.length) {
