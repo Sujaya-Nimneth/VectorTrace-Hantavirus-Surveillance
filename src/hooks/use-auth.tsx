@@ -1,4 +1,13 @@
-import { createContext, useContext, useEffect, useState, type ReactNode } from "react";
+import {
+  createContext,
+  useCallback,
+  useContext,
+  useEffect,
+  useMemo,
+  useState,
+  type ReactNode,
+} from "react";
+import { useQueryClient } from "@tanstack/react-query";
 import type { Session, User } from "@supabase/supabase-js";
 import { supabase } from "@/integrations/supabase/client";
 
@@ -19,6 +28,7 @@ const Ctx = createContext<AuthCtx>({
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [session, setSession] = useState<Session | null>(null);
   const [loading, setLoading] = useState(true);
+  const queryClient = useQueryClient();
 
   useEffect(() => {
     const { data: sub } = supabase.auth.onAuthStateChange((_evt, s) => {
@@ -31,20 +41,19 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     return () => sub.subscription.unsubscribe();
   }, []);
 
-  return (
-    <Ctx.Provider
-      value={{
-        session,
-        user: session?.user ?? null,
-        loading,
-        signOut: async () => {
-          await supabase.auth.signOut();
-        },
-      }}
-    >
-      {children}
-    </Ctx.Provider>
+  // Clearing the query cache on sign-out prevents the next user on a shared
+  // machine from seeing cached roles and surveillance data from this session.
+  const signOut = useCallback(async () => {
+    await supabase.auth.signOut();
+    queryClient.removeQueries();
+  }, [queryClient]);
+
+  const value = useMemo<AuthCtx>(
+    () => ({ session, user: session?.user ?? null, loading, signOut }),
+    [session, loading, signOut],
   );
+
+  return <Ctx.Provider value={value}>{children}</Ctx.Provider>;
 }
 
 export const useAuth = () => useContext(Ctx);
