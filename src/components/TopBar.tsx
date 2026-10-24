@@ -8,13 +8,16 @@ import {
   LogIn,
   Menu,
   MapPin,
+  Moon,
   Rat,
   ShieldAlert,
+  Sun,
   X,
 } from "lucide-react";
 import { useState, useRef, useEffect, useMemo } from "react";
 import { useAuth } from "@/hooks/use-auth";
 import { useRoles } from "@/hooks/use-roles";
+import { useTheme } from "@/hooks/use-theme";
 import { useAlerts, useCases, useRodents } from "@/hooks/use-surveillance";
 import { REGIONS } from "@/lib/mock-data";
 import { isDemoMode } from "@/lib/demo-mode";
@@ -40,6 +43,7 @@ export function TopBar({ onOpenMenu }: { onOpenMenu?: () => void }) {
   const label = labels[path] ?? "VectorTrace";
   const { user, signOut } = useAuth();
   const { roles, isAdmin } = useRoles();
+  const { theme, toggle: toggleTheme } = useTheme();
   const { data: cases } = useCases();
   const { data: rodents } = useRodents();
   const { data: alerts } = useAlerts();
@@ -340,6 +344,18 @@ export function TopBar({ onOpenMenu }: { onOpenMenu?: () => void }) {
             </div>
           </div>
         )}
+      </div>
+
+      <div className="relative">
+        <button
+          type="button"
+          onClick={toggleTheme}
+          aria-label={theme === "dark" ? "Switch to light theme" : "Switch to dark theme"}
+          title={theme === "dark" ? "Switch to light theme" : "Switch to dark theme"}
+          className="size-9 grid place-items-center rounded-md hover:bg-muted text-muted-foreground hover:text-foreground transition-colors"
+        >
+          {theme === "dark" ? <Sun className="size-4" /> : <Moon className="size-4" />}
+        </button>
       </div>
 
       {user ? (
