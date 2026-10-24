@@ -3,6 +3,7 @@ services:
     build:
       context: .
       dockerfile: Dockerfile.web
+    restart: unless-stopped
     environment:
       VITE_SUPABASE_URL: ${VITE_SUPABASE_URL}
       VITE_SUPABASE_PUBLISHABLE_KEY: ${VITE_SUPABASE_PUBLISHABLE_KEY}
@@ -19,6 +20,7 @@ services:
     build:
       context: .
       dockerfile: Dockerfile.scraper
+    restart: unless-stopped
     environment:
       INGEST_URL: ${INGEST_URL}
       HEALTHCHECK_URL: ${HEALTHCHECK_URL}
@@ -28,8 +30,10 @@ services:
 
   nginx:
     image: nginx:alpine
+    restart: unless-stopped
     depends_on:
-      - web
+      web:
+        condition: service_healthy
     ports:
       - "80:80"
     volumes:
