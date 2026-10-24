@@ -6,7 +6,8 @@ import { TopBar } from "./TopBar";
 export function AppLayout() {
   const path = useRouterState({ select: (s) => s.location.pathname });
   const isMap = path === "/map";
-  const bare = path === "/login";
+  // Landing and login render standalone, outside the app shell.
+  const bare = path === "/login" || path === "/";
   const [mobileOpen, setMobileOpen] = useState(false);
 
   useEffect(() => {

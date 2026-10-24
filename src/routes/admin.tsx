@@ -51,7 +51,7 @@ function AdminGate() {
         icon={ShieldOff}
         title="Insufficient privileges"
         body={`Account ${user.email} doesn't hold the admin role required for this console.`}
-        action={{ to: "/", label: "Back to dashboard" }}
+        action={{ to: "/dashboard", label: "Back to dashboard" }}
       />
     );
   }

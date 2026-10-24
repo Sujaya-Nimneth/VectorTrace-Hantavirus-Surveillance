@@ -6,7 +6,7 @@ import { useCases, useRodents } from "@/hooks/use-surveillance";
 import { isDemoMode } from "@/lib/demo-mode";
 
 const nav = [
-  { to: "/", label: "Executive Dashboard", icon: LayoutDashboard },
+  { to: "/dashboard", label: "Executive Dashboard", icon: LayoutDashboard },
   { to: "/map", label: "Geospatial Tracker", icon: Map },
   { to: "/intake", label: "Case Intake", icon: ClipboardPlus },
   { to: "/admin", label: "System Infrastructure", icon: ServerCog },

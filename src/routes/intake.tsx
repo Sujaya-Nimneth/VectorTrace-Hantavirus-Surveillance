@@ -103,7 +103,7 @@ function Intake() {
         icon={ClipboardCheck}
         title="Insufficient privileges"
         body="Case submission is restricted to admin and epidemiologist roles."
-        action={{ to: "/", label: "Back to dashboard" }}
+        action={{ to: "/dashboard", label: "Back to dashboard" }}
       />
     );
   }
@@ -188,7 +188,7 @@ function Intake() {
       }
 
       toast.success(`Case ${case_id} submitted to surveillance registry`);
-      navigate({ to: "/" });
+      navigate({ to: "/dashboard" });
     } catch (e: unknown) {
       const message = e instanceof Error ? e.message : "Submission failed";
       setErr(message);

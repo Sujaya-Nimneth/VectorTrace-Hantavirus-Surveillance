@@ -1,221 +1,182 @@
-import { createFileRoute } from "@tanstack/react-router";
-import { useMemo, useState } from "react";
-import { MetricCard } from "@/components/MetricCard";
-import { EpidemicCurve } from "@/components/EpidemicCurve";
-import { AlertsFeed } from "@/components/AlertsFeed";
-import { RiskTable } from "@/components/RiskTable";
-import { QueryError } from "@/components/QueryError";
-import { Skeleton } from "@/components/Skeleton";
-import { Activity, Rat, ShieldAlert, FlaskConical } from "lucide-react";
-import { useCases, useRodents } from "@/hooks/use-surveillance";
-import { useNow } from "@/hooks/use-now";
-import { DAY_MS } from "@/lib/time";
+import { createFileRoute, Link } from "@tanstack/react-router";
+import {
+  Activity,
+  ArrowRight,
+  Bug,
+  Globe2,
+  LayoutDashboard,
+  Lock,
+  Map,
+  Radar,
+  ServerCog,
+} from "lucide-react";
 
-export const Route = createFileRoute("/")({ component: Dashboard });
+export const Route = createFileRoute("/")({
+  component: Landing,
+  head: () => ({
+    meta: [
+      { title: "VectorTrace · Hantavirus Surveillance Command Center" },
+      {
+        name: "description",
+        content:
+          "Real-time hantavirus epidemiological tracking: executive dashboard, geospatial risk mapping, rapid case intake, and automated WHO outbreak-news ingestion.",
+      },
+    ],
+  }),
+});
 
-function bucketByDay(items: { date: string }[], days: number, now: number) {
-  const out = new Array<number>(days).fill(0);
-  for (const item of items) {
-    const d = Math.floor((now - +new Date(item.date)) / DAY_MS);
-    if (d >= 0 && d < days) out[days - 1 - d]++;
-  }
-  return out;
-}
-
-const CURVE_RANGES = [
-  { label: "7D", days: 7 as const },
-  { label: "30D", days: 30 as const },
-  { label: "90D", days: 90 as const },
+const FEATURES = [
+  {
+    icon: LayoutDashboard,
+    title: "Executive dashboard",
+    body: "Live case metrics with trend deltas, a stacked epidemic curve, severity-filtered alerts, and a regional risk ranking with CSV export.",
+  },
+  {
+    icon: Map,
+    title: "Geospatial tracker",
+    body: "Leaflet mapping with case markers, rodent reservoir sites, a risk-density heat layer, and shareable focus URLs for every case.",
+  },
+  {
+    icon: Bug,
+    title: "Rapid case intake",
+    body: "A four-step clinician workflow with schema-validated vocabularies, local drafts, and optimistic realtime updates.",
+  },
+  {
+    icon: Radar,
+    title: "Automated ingestion",
+    body: "A scheduled edge function pulls WHO Disease Outbreak News, normalizes and dedupes items, and raises alerts on new confirmations.",
+  },
+  {
+    icon: Lock,
+    title: "Row-level security",
+    body: "Supabase RLS with admin, epidemiologist, and viewer roles. Clinical details stay behind authenticated read; the public sees a safe projection.",
+  },
+  {
+    icon: ServerCog,
+    title: "Observability console",
+    body: "Ingest success rates, feed uptime, and database latency percentiles in an admin-only console, code-split out of the main bundle.",
+  },
 ];
 
-function Dashboard() {
-  const {
-    data: cases,
-    loading: casesLoading,
-    error: casesError,
-    refetch: refetchCases,
-  } = useCases();
-  const {
-    data: rodents,
-    loading: rodentsLoading,
-    error: rodentsError,
-    refetch: refetchRodents,
-  } = useRodents();
-  const [curveRange, setCurveRange] = useState<7 | 30 | 90>(90);
-  const loading = casesLoading || rodentsLoading;
-  const now = useNow();
-
-  const metrics = useMemo(() => {
-    const inWindow = (iso: string, minDays: number, maxDays: number) => {
-      const d = (now - +new Date(iso)) / DAY_MS;
-      return d > minDays && d <= maxDays;
-    };
-    // null = no prior baseline (prev window empty), rendered as "New".
-    const delta = (curr: number, prev: number): number | null =>
-      prev === 0 ? (curr === 0 ? 0 : null) : Math.round(((curr - prev) / prev) * 100);
-
-    const last30Cases = cases.filter((c) => inWindow(c.date, -1, 30));
-    const prior30Cases = cases.filter((c) => inWindow(c.date, 30, 60));
-
-    const last30Rodents = rodents.filter((r) => inWindow(r.date, -1, 30));
-    const prior30Rodents = rodents.filter((r) => inWindow(r.date, 30, 60));
-
-    const confirmedCases = cases.filter((c) => c.status === "Confirmed");
-    const last30Confirmed = confirmedCases.filter((c) => inWindow(c.date, -1, 30));
-    const prior30Confirmed = confirmedCases.filter((c) => inWindow(c.date, 30, 60));
-
-    const pendingCases = cases.filter((c) => c.status === "Pending");
-    const last30Pending = pendingCases.filter((c) => inWindow(c.date, -1, 30));
-    const prior30Pending = pendingCases.filter((c) => inWindow(c.date, 30, 60));
-
-    const yearStart = new Date(new Date().getFullYear(), 0, 1).getTime();
-    const ytdConfirmed = confirmedCases.filter((c) => +new Date(c.date) >= yearStart).length;
-
-    return {
-      active: {
-        value: last30Cases.length,
-        delta: delta(last30Cases.length, prior30Cases.length),
-        spark: bucketByDay(cases, 14, now),
-      },
-      rodents: {
-        value: rodents.length,
-        delta: delta(last30Rodents.length, prior30Rodents.length),
-        spark: bucketByDay(rodents, 14, now),
-      },
-      ytd: {
-        value: ytdConfirmed,
-        delta: delta(last30Confirmed.length, prior30Confirmed.length),
-        spark: bucketByDay(confirmedCases, 14, now),
-      },
-      pending: {
-        value: pendingCases.length,
-        delta: delta(last30Pending.length, prior30Pending.length),
-        spark: bucketByDay(pendingCases, 14, now),
-      },
-    };
-  }, [cases, rodents, now]);
-
-  const fmt = (n: number) => n.toLocaleString();
-
+function Landing() {
   return (
-    <div className="p-4 sm:p-6 space-y-5 max-w-[1600px] mx-auto">
-      <div>
-        <h1 className="text-xl font-bold tracking-tight">Command Center</h1>
-        <p className="text-[12.5px] text-muted-foreground mt-0.5">
-          Real-time hantavirus surveillance · {cases.length} cases tracked across {rodents.length}{" "}
-          sites
-        </p>
-      </div>
-
-      {(casesError || rodentsError) && (
-        <QueryError
-          what="surveillance data"
-          error={casesError ?? rodentsError}
-          onRetry={() => {
-            if (casesError) void refetchCases();
-            if (rodentsError) void refetchRodents();
-          }}
-        />
-      )}
-
-      {loading ? (
+    <div className="min-h-full bg-background">
+      {/* Hero */}
+      <section className="relative overflow-hidden border-b border-border">
         <div
-          className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4"
-          role="status"
-          aria-label="Loading metrics"
-        >
-          <span className="sr-only">Loading metrics…</span>
-          {[0, 1, 2, 3].map((i) => (
-            <Skeleton key={i} className="h-[118px] w-full rounded-lg" />
+          aria-hidden="true"
+          className="absolute inset-0 bg-[radial-gradient(60%_50%_at_50%_-10%,color-mix(in_oklch,var(--teal)_22%,transparent),transparent)]"
+        />
+        <div className="relative max-w-5xl mx-auto px-4 sm:px-6 py-16 sm:py-24 text-center">
+          <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full border border-teal/40 bg-teal/10 text-teal text-[11.5px] font-semibold">
+            <Activity className="size-3.5" /> Real-time epidemiological surveillance
+          </div>
+          <h1 className="mt-5 text-3xl sm:text-5xl font-bold tracking-tight leading-tight">
+            Track hantavirus outbreaks
+            <br className="hidden sm:block" /> before they spread.
+          </h1>
+          <p className="mt-4 max-w-2xl mx-auto text-[14px] sm:text-[15px] text-muted-foreground leading-relaxed">
+            VectorTrace combines a command-center dashboard, geospatial risk mapping, and a rapid
+            case intake workflow with an automated WHO Disease Outbreak News pipeline — secured by
+            Postgres row-level security and deployed to the edge.
+          </p>
+          <div className="mt-7 flex flex-wrap items-center justify-center gap-3">
+            <Link
+              to="/dashboard"
+              className="inline-flex items-center gap-2 px-5 h-11 rounded-md text-[14px] font-semibold bg-primary text-primary-foreground hover:bg-primary/90 transition-colors"
+            >
+              Open the Command Center <ArrowRight className="size-4" />
+            </Link>
+            <a
+              href="https://github.com/Sujaya-Nimneth/hanta-watch-central"
+              className="inline-flex items-center gap-2 px-5 h-11 rounded-md text-[14px] font-semibold border border-input hover:bg-muted transition-colors"
+            >
+              <Globe2 className="size-4" /> View on GitHub
+            </a>
+          </div>
+          <p className="mt-3 text-[11.5px] text-muted-foreground">
+            No account needed — the public dashboard runs on the live surveillance feed (or a
+            bundled demo dataset when unconfigured).
+          </p>
+
+          <div className="mt-10 sm:mt-14 rounded-xl border border-border shadow-2xl overflow-hidden bg-card">
+            <div className="flex items-center gap-1.5 px-4 py-2.5 border-b border-border bg-muted/60">
+              <span className="size-2.5 rounded-full bg-alert/70" />
+              <span className="size-2.5 rounded-full bg-warning/70" />
+              <span className="size-2.5 rounded-full bg-success/70" />
+              <span className="ml-3 text-[11px] text-muted-foreground font-mono truncate">
+                vectortrace · command center
+              </span>
+            </div>
+            <img
+              src="/screenshots/dashboard-dark.png"
+              alt="VectorTrace executive dashboard showing case metrics, the epidemic curve, and regional risk ranking"
+              className="w-full"
+              width={1440}
+              height={900}
+            />
+          </div>
+        </div>
+      </section>
+
+      {/* Features */}
+      <section className="max-w-5xl mx-auto px-4 sm:px-6 py-14 sm:py-20">
+        <h2 className="text-xl sm:text-2xl font-bold tracking-tight text-center">
+          A full surveillance stack, end to end
+        </h2>
+        <p className="mt-2 text-center text-[13px] text-muted-foreground">
+          Ingestion, analytics, field tools, and infrastructure observability in one platform.
+        </p>
+        <div className="mt-9 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+          {FEATURES.map((f) => (
+            <div
+              key={f.title}
+              className="bg-card border border-border rounded-lg p-5 hover:border-teal/40 transition-colors"
+            >
+              <div className="size-9 rounded-md grid place-items-center bg-teal/10 text-teal">
+                <f.icon className="size-4.5" />
+              </div>
+              <h3 className="mt-3.5 text-[14px] font-semibold">{f.title}</h3>
+              <p className="mt-1.5 text-[12.5px] text-muted-foreground leading-relaxed">{f.body}</p>
+            </div>
           ))}
         </div>
-      ) : (
-        <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4">
-          <MetricCard
-            label="Active Human Cases"
-            value={fmt(metrics.active.value)}
-            delta={metrics.active.delta}
-            tone="alert"
-            icon={ShieldAlert}
-            spark={metrics.active.spark}
-          />
-          <MetricCard
-            label="Rodent Vector Sites"
-            value={fmt(metrics.rodents.value)}
-            delta={metrics.rodents.delta}
-            tone="warning"
-            icon={Rat}
-            spark={metrics.rodents.spark}
-            invertDelta
-          />
-          <MetricCard
-            label="YTD Confirmed Cases"
-            value={fmt(metrics.ytd.value)}
-            delta={metrics.ytd.delta}
-            tone="info"
-            icon={Activity}
-            spark={metrics.ytd.spark}
-          />
-          <MetricCard
-            label="Pending Lab Results"
-            value={fmt(metrics.pending.value)}
-            delta={metrics.pending.delta}
-            tone="success"
-            icon={FlaskConical}
-            spark={metrics.pending.spark}
-          />
-        </div>
-      )}
+      </section>
 
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
-        <div className="lg:col-span-2 bg-card border border-border rounded-lg p-5">
-          <div className="flex items-center justify-between mb-3 gap-2">
-            <div>
-              <h2 className="text-[14px] font-semibold">Epidemic Curve</h2>
-              <p className="text-[11.5px] text-muted-foreground">
-                Cases / {curveRange} days · stacked by region · moving average trend
-              </p>
-            </div>
-            <div className="flex gap-1 text-[11px]">
-              {CURVE_RANGES.map((t) => (
-                <button
-                  key={t.label}
-                  type="button"
-                  aria-pressed={curveRange === t.days}
-                  onClick={() => setCurveRange(t.days)}
-                  className={`px-2.5 py-1 rounded font-medium transition-colors ${
-                    curveRange === t.days
-                      ? "bg-primary text-primary-foreground"
-                      : "text-muted-foreground hover:bg-muted"
-                  }`}
-                >
-                  {t.label}
-                </button>
-              ))}
-            </div>
+      {/* CTA strip */}
+      <section className="border-t border-border bg-card/60">
+        <div className="max-w-5xl mx-auto px-4 sm:px-6 py-12 flex flex-col sm:flex-row items-center justify-between gap-5">
+          <div>
+            <h2 className="text-[17px] font-bold tracking-tight">Ready to explore the data?</h2>
+            <p className="text-[12.5px] text-muted-foreground mt-1">
+              The dashboard and map are public; clinicians can sign in to submit cases.
+            </p>
           </div>
-          <EpidemicCurve days={curveRange} />
-        </div>
-        <div className="bg-card border border-border rounded-lg p-5">
-          <div className="flex items-center justify-between mb-3">
-            <h2 className="text-[14px] font-semibold">Recent Alerts</h2>
-            <span className="text-[11px] text-alert font-semibold inline-flex items-center gap-1">
-              <span className="size-1.5 rounded-full bg-alert animate-pulse" /> Live
-            </span>
+          <div className="flex flex-wrap gap-3">
+            <Link
+              to="/map"
+              className="inline-flex items-center gap-2 px-5 h-10 rounded-md text-[13.5px] font-semibold border border-input hover:bg-muted transition-colors"
+            >
+              <Map className="size-4" /> Open the map
+            </Link>
+            <Link
+              to="/dashboard"
+              className="inline-flex items-center gap-2 px-5 h-10 rounded-md text-[13.5px] font-semibold bg-primary text-primary-foreground hover:bg-primary/90 transition-colors"
+            >
+              Go to dashboard <ArrowRight className="size-4" />
+            </Link>
           </div>
-          <AlertsFeed />
         </div>
-      </div>
+      </section>
 
-      <div className="bg-card border border-border rounded-lg p-5">
-        <div className="mb-3">
-          <h2 className="text-[14px] font-semibold">Highest Risk Regions</h2>
-          <p className="text-[11.5px] text-muted-foreground">
-            Sorted by infection rate per 100,000 population
-          </p>
+      <footer className="border-t border-border">
+        <div className="max-w-5xl mx-auto px-4 sm:px-6 py-6 flex flex-wrap items-center justify-between gap-3 text-[11.5px] text-muted-foreground">
+          <span className="inline-flex items-center gap-1.5">
+            <Activity className="size-3.5 text-teal" /> VectorTrace — hantavirus surveillance
+          </span>
+          <span>React 19 · TanStack Start · Supabase · Cloudflare Workers</span>
         </div>
-        <RiskTable />
-      </div>
+      </footer>
     </div>
   );
 }

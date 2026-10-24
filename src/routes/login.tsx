@@ -30,7 +30,7 @@ function LoginPage() {
 
   useEffect(() => {
     if (user) {
-      if (safeRedirect === "/") navigate({ to: "/" });
+      if (safeRedirect === "/") navigate({ to: "/dashboard" });
       else router.history.push(safeRedirect);
     }
   }, [user, navigate, router, safeRedirect]);
@@ -63,7 +63,7 @@ function LoginPage() {
   return (
     <div className="min-h-screen grid place-items-center bg-background p-6">
       <div className="w-full max-w-md">
-        <Link to="/" className="flex items-center gap-2.5 mb-8 justify-center">
+        <Link to="/dashboard" className="flex items-center gap-2.5 mb-8 justify-center">
           <div className="size-10 rounded-md bg-teal/15 border border-teal/40 grid place-items-center">
             <Activity className="size-5 text-teal" />
           </div>
