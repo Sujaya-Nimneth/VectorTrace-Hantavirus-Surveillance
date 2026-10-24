@@ -103,12 +103,14 @@ function normalizeItem(
   }
 
   let reportedAt = new Date().toISOString();
+  let reportedAtDefaulted = true;
   if (it.reported_at != null) {
     const d = new Date(it.reported_at);
     if (Number.isNaN(d.getTime())) {
       return { ok: false, reason: `item for ${region}: invalid reported_at "${it.reported_at}"` };
     }
     reportedAt = d.toISOString();
+    reportedAtDefaulted = false;
   }
 
   const syndrome = it.syndrome ?? "HPS";
@@ -120,14 +122,27 @@ function normalizeItem(
     return { ok: false, reason: `item for ${region}: invalid status "${String(it.status)}"` };
   }
 
+  // When reported_at was defaulted it differs on every run, so hashing it
+  // would mint a new id per run and duplicate the same DON item. Fall back
+  // to region + summary, which are stable across runs for the same item.
   const caseId =
     it.case_id?.trim() ||
     it.external_id?.trim() ||
-    stableCaseId(`${region}|${reportedAt}|${it.summary ?? ""}`);
+    stableCaseId(
+      reportedAtDefaulted ? `${region}|${it.summary ?? ""}` : `${region}|${reportedAt}|${it.summary ?? ""}`,
+    );
 
   return {
     ok: true,
-    value: { case_id: caseId, region, lat, lng, reported_at: reportedAt, syndrome, status },
+    value: {
+      case_id: caseId,
+      region,
+      lat,
+      lng,
+      reported_at: reportedAt,
+      syndrome,
+      status,
+    },
   };
 }
 
@@ -143,10 +158,15 @@ Deno.serve(async (req) => {
       );
     }
 
-    supabase = createClient(
-      Deno.env.get("SUPABASE_URL")!,
-      Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!,
-    );
+    const supabaseUrl = Deno.env.get("SUPABASE_URL");
+    const supabaseKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
+    if (!supabaseUrl || !supabaseKey) {
+      return new Response(
+        "SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY secrets must both be set",
+        { status: 500 },
+      );
+    }
+    supabase = createClient(supabaseUrl, supabaseKey);
 
     // --- Step 1: Scrape the WHO DON page using Firecrawl ---
     const firecrawlKey = Deno.env.get("FIRECRAWL_API_KEY");
@@ -154,13 +174,7 @@ Deno.serve(async (req) => {
       return new Response("FIRECRAWL_API_KEY secret is not set", { status: 500 });
     }
 
-    const scrape = await fetch(FIRECRAWL_SCRAPE_ENDPOINT, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        Authorization: `Bearer ${firecrawlKey}`,
-      },
-      body: JSON.stringify({
+    const scrapeBody = JSON.stringify({
         url: SOURCE_URL,
         formats: [
           "markdown",
@@ -211,19 +225,54 @@ Deno.serve(async (req) => {
         ],
         onlyMainContent: true,
         timeout: 120000,
-      }),
-    });
+      });
 
+    // Retry transient Firecrawl failures (429/5xx) with exponential backoff;
+    // a single blip should not fail the whole ingest run.
+    let scrape: Response | null = null;
+    let lastErrText = "";
+    for (let attempt = 0; attempt < 3; attempt++) {
+      if (attempt > 0) await new Promise((r) => setTimeout(r, 1000 * 2 ** (attempt - 1)));
+      const res = await fetch(FIRECRAWL_SCRAPE_ENDPOINT, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${firecrawlKey}`,
+        },
+        body: scrapeBody,
+      });
+      if (res.ok || (res.status !== 429 && res.status < 500)) {
+        scrape = res;
+        break;
+      }
+      lastErrText = await res.text();
+      scrape = res;
+    }
+    if (!scrape) {
+      return new Response(`scrape failed: no response`, { status: 502 });
+    }
     if (!scrape.ok) {
-      const errText = await scrape.text();
+      const errText = scrape.status === 429 || scrape.status >= 500 ? lastErrText : await scrape.text();
       return new Response(`scrape failed: ${scrape.status} – ${errText}`, { status: 502 });
     }
 
     const scrapeResult = await scrape.json();
 
+    // A 200 with an errored or malformed payload must fail the run; otherwise
+    // an upstream schema change would silently masquerade as "no news".
+    if (scrapeResult?.success === false) {
+      throw new Error(`firecrawl reported failure: ${JSON.stringify(scrapeResult?.error ?? "")}`);
+    }
     // Firecrawl returns { success, data: { json: { ... }, markdown, ... } }
-    const jsonData = scrapeResult?.data?.json ?? scrapeResult?.data ?? {};
-    const rawItems: RawDonItem[] = Array.isArray(jsonData) ? jsonData : (jsonData?.items ?? []);
+    const jsonData = scrapeResult?.data?.json ?? scrapeResult?.data;
+    const rawItems: RawDonItem[] | null = Array.isArray(jsonData)
+      ? jsonData
+      : Array.isArray(jsonData?.items)
+        ? jsonData.items
+        : null;
+    if (rawItems === null) {
+      throw new Error("malformed firecrawl payload: expected data.json or data.json.items array");
+    }
 
     // Filter for hantavirus-related items only
     const hantaKeywords = [
