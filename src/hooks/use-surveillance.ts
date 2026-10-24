@@ -16,10 +16,10 @@ type DbCase = {
   reported_at: string;
   syndrome: "HPS" | "HFRS";
   status: "Confirmed" | "Suspected" | "Pending";
-  age: number | null;
-  sex: "M" | "F" | null;
-  symptoms: string[] | null;
-  exposure: string | null;
+  age?: number | null;
+  sex?: "M" | "F" | null;
+  symptoms?: string[] | null;
+  exposure?: string | null;
 };
 
 type DbRodent = {
@@ -75,8 +75,12 @@ const mapAlert = (r: DbAlert): Alert => ({
 
 async function fetchCases(): Promise<Case[]> {
   if (isDemoMode()) return MOCK_CASES;
+  // Anonymous sessions read the public view (no clinical columns);
+  // signed-in readers get the full table through RLS.
+  const { data: sessionData } = await supabase.auth.getSession();
+  const table = sessionData.session ? "hanta_cases" : "hanta_cases_public";
   const { data: rows, error } = await supabase
-    .from("hanta_cases")
+    .from(table)
     .select("*")
     .order("reported_at", { ascending: false })
     .limit(500);

@@ -32,6 +32,22 @@ export type Database = {
         };
         Relationships: [];
       };
+      hanta_cases_public: {
+        Row: {
+          case_id: string;
+          created_at: string;
+          id: string;
+          lat: number;
+          lng: number;
+          region: string;
+          reported_at: string;
+          status: Database["public"]["Enums"]["case_status"];
+          syndrome: Database["public"]["Enums"]["case_syndrome"];
+        };
+        Insert: never;
+        Update: never;
+        Relationships: [];
+      };
       hanta_cases: {
         Row: {
           age: number | null;
