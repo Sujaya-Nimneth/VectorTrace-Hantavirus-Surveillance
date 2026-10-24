@@ -1,5 +1,6 @@
 import { ServerCog, Database, Cpu, Lock, ShieldCheck, Zap, type LucideIcon } from "lucide-react";
 import { useInfra } from "@/hooks/use-infra";
+import { useNow } from "@/hooks/use-now";
 import { relativeTime, HOUR_MS } from "@/lib/time";
 import { QueryError } from "@/components/QueryError";
 import { Skeleton } from "@/components/Skeleton";
@@ -17,11 +18,12 @@ export default function AdminConsole() {
   const cron = data?.cron ?? null;
   const db = data?.db ?? null;
   const sources = data?.sources ?? [];
+  const now = useNow();
 
   const lastSuccessLabel = cron?.lastSuccessAt ? relativeTime(cron.lastSuccessAt) : "—";
   const poolLabel =
     db?.poolMax != null && db.poolUsed != null ? `${db.poolUsed}/${db.poolMax}` : "n/a";
-  const successAge = cron?.lastSuccessAt ? Date.now() - +new Date(cron.lastSuccessAt) : Infinity;
+  const successAge = cron?.lastSuccessAt ? now - +new Date(cron.lastSuccessAt) : Infinity;
   const engineTone =
     cron === null ? "warn" : cron.successRate >= 95 && successAge < HOUR_MS ? "ok" : "warn";
   const cronTone = cron === null ? "warn" : cron.successRate >= 95 ? "ok" : "warn";

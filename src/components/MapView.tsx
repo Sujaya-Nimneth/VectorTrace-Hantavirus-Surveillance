@@ -95,14 +95,17 @@ function MapController({
   // so deep links are shareable and survive refresh.
   const search = useSearch({ strict: false }) as { case?: string; site?: string; region?: string };
 
-  // Refs so the focus effect below registers once instead of re-subscribing
-  // every time the data arrays change.
+  // Refs so the focus effect below reads fresh data without re-running on
+  // every data change. Synced in an effect (writing refs during render is
+  // unsafe under concurrent rendering).
   const casesRef = useRef(cases);
-  casesRef.current = cases;
   const rodentsRef = useRef(rodents);
-  rodentsRef.current = rodents;
   const selectRef = useRef(onSelectCase);
-  selectRef.current = onSelectCase;
+  useEffect(() => {
+    casesRef.current = cases;
+    rodentsRef.current = rodents;
+    selectRef.current = onSelectCase;
+  });
 
   useEffect(() => {
     if (points.length > 0 && fittedRangeRef.current !== range) {

@@ -1,5 +1,5 @@
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import {
   Check,
@@ -50,21 +50,24 @@ function Intake() {
   const [step, setStep] = useState(1);
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState<string | null>(null);
-  const [form, setForm] = useState<IntakeForm>(DEFAULT_INTAKE_FORM);
-  const [draftRestored, setDraftRestored] = useState(false);
-
-  useEffect(() => {
+  // Draft restored lazily on first render — no setState effect needed.
+  const [form, setForm] = useState<IntakeForm>(() => {
+    if (typeof window === "undefined") return DEFAULT_INTAKE_FORM;
     try {
       const saved = localStorage.getItem(DRAFT_STORAGE_KEY);
-      if (saved) {
-        const parsed = JSON.parse(saved) as Partial<IntakeForm>;
-        setForm((prev) => ({ ...prev, ...parsed }));
-        setDraftRestored(true);
-      }
+      if (saved) return { ...DEFAULT_INTAKE_FORM, ...(JSON.parse(saved) as Partial<IntakeForm>) };
     } catch {
       // ignore invalid draft
     }
-  }, []);
+    return DEFAULT_INTAKE_FORM;
+  });
+  const [draftRestored, setDraftRestored] = useState(() => {
+    try {
+      return !!localStorage.getItem(DRAFT_STORAGE_KEY);
+    } catch {
+      return false;
+    }
+  });
 
   const discardDraft = () => {
     try {

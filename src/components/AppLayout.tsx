@@ -1,5 +1,5 @@
 import { Outlet, useRouterState } from "@tanstack/react-router";
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { Sidebar } from "./Sidebar";
 import { TopBar } from "./TopBar";
 
@@ -9,10 +9,13 @@ export function AppLayout() {
   // Landing and login render standalone, outside the app shell.
   const bare = path === "/login" || path === "/";
   const [mobileOpen, setMobileOpen] = useState(false);
-
-  useEffect(() => {
+  // Close the mobile drawer on navigation by adjusting state during render
+  // (guarded), instead of a cascading setState effect.
+  const [lastPath, setLastPath] = useState(path);
+  if (path !== lastPath) {
+    setLastPath(path);
     setMobileOpen(false);
-  }, [path]);
+  }
 
   if (bare) {
     return (
