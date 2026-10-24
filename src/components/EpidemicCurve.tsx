@@ -12,61 +12,22 @@ import {
 } from "recharts";
 import { useCases } from "@/hooks/use-surveillance";
 import { REGIONS } from "@/lib/mock-data";
+import { buildEpidemicCurveBuckets } from "@/lib/epi-curve";
 import { QueryError } from "./QueryError";
 import { Skeleton } from "./Skeleton";
-
-type BucketRow = {
-  date: string;
-  trend?: number;
-  [region: string]: string | number | undefined;
-};
 
 export function EpidemicCurve({ days = 90 }: { days?: 7 | 30 | 90 }) {
   const { data: CASES, loading, error, refetch } = useCases();
 
-  const data = useMemo(() => {
-    const step = days === 90 ? 3 : 1;
-    const maxOffset = days - 1;
-    const buckets: Record<string, BucketRow> = {};
-    const now = new Date();
-
-    for (let i = maxOffset; i >= 0; i -= step) {
-      const d = new Date(now);
-      d.setDate(d.getDate() - i);
-      const key = `${d.getMonth() + 1}/${d.getDate()}`;
-      const row: BucketRow = { date: key };
-      for (const r of REGIONS) {
-        row[r.name] = 0;
-      }
-      buckets[key] = row;
-    }
-
-    for (const c of CASES) {
-      const cd = new Date(c.date);
-      const ageDays = Math.floor((+now - +cd) / 86400000);
-      if (ageDays < 0 || ageDays > maxOffset) continue;
-      const bucketOffset = Math.floor(ageDays / step) * step;
-      const d = new Date(now);
-      d.setDate(d.getDate() - bucketOffset);
-      const key = `${d.getMonth() + 1}/${d.getDate()}`;
-      const row = buckets[key];
-      if (row) {
-        row[c.region] = Number(row[c.region] || 0) + 1;
-      }
-    }
-
-    const arr = Object.values(buckets);
-    arr.forEach((row, idx) => {
-      const slice = arr.slice(Math.max(0, idx - 2), idx + 1);
-      const avg =
-        slice.reduce(
-          (sum, r) => sum + REGIONS.reduce((acc, reg) => acc + Number(r[reg.name] || 0), 0),
-          0,
-        ) / slice.length;
-      row.trend = +avg.toFixed(1);
-    });
-    return arr;
-  }, [CASES, days]);
+  const data = useMemo(
+    () =>
+      buildEpidemicCurveBuckets(
+        CASES,
+        days,
+        REGIONS.map((r) => r.name),
+      ),
+    [CASES, days],
+  );
 
   const palette = [
     "var(--chart-3)",
