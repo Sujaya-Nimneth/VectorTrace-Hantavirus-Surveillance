@@ -93,18 +93,41 @@ npm run build         # production build
 
 ## Supabase setup
 
-1. Create a Supabase project and apply the migrations in `supabase/migrations/` in order.
-2. Deploy the edge functions in `supabase/functions/` and set their secrets.
-3. Schedule them via the `infra_config` values created by the cron migration:
+The checked-in config targets project `wsgbrwmgiyecsbpvpfpd`. For a new or forked environment:
+
+1. Authenticate and link the project:
+
+   ```bash
+   supabase login
+   supabase link --project-ref <PROJECT_REF>
+   ```
+
+2. Apply the migrations in `supabase/migrations/` in order:
+
+   ```bash
+   supabase db push
+   ```
+
+3. Deploy the edge functions and set their secrets:
+
+   ```bash
+   supabase functions deploy ingest-don-feed
+   supabase functions deploy infra-health-check
+   supabase secrets set FIRECRAWL_API_KEY=<KEY> INGEST_TOKEN=<TOKEN>
+   ```
+
+4. Schedule them via the `infra_config` values created by the cron migration. Use the **same** token for `INGEST_TOKEN` and both scheduler rows:
 
    ```sql
    insert into public.infra_config (key, value)
    values
      ('supabase_functions_base_url', 'https://<PROJECT_REF>.supabase.co/functions/v1'),
-     ('ingest_token', '<YOUR_TOKEN>'),
-     ('healthcheck_token', '<YOUR_TOKEN>')
+     ('ingest_token', '<SAME_TOKEN_AS_INGEST_TOKEN_SECRET>'),
+     ('healthcheck_token', '<SAME_TOKEN_AS_INGEST_TOKEN_SECRET>')
    on conflict (key) do update set value = excluded.value;
    ```
+
+The edge functions fail closed: requests return `401` until `INGEST_TOKEN` is set and matches the `Authorization: Bearer ...` header. The cron jobs use the two `infra_config` token rows above.
 
 The first user to sign up is auto-granted `admin`; everyone after gets `viewer`.
 

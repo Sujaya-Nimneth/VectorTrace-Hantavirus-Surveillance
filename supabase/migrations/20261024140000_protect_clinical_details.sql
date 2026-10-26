@@ -15,9 +15,10 @@ create policy "Authenticated can view cases"
   to authenticated
   using (true);
 
--- Owned by postgres, so the view reads the base table without RLS while
--- exposing only surveillance-analytics columns.
-create view public.hanta_cases_public as
+-- The view exposes only surveillance-analytics columns. security_invoker
+-- keeps base-table RLS in force for the querying role.
+create view public.hanta_cases_public
+with (security_invoker = true) as
   select
     id,
     case_id,
