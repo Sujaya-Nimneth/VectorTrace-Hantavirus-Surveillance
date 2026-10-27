@@ -12,11 +12,14 @@
 # Build artifacts and caches
 node_modules
 dist
+.cloudflare
 .wrangler
 .tanstack
 *.log
+coverage
 
 # Local tooling state
 supabase/.temp
 .vscode
 .idea
+.zcode

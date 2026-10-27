@@ -22,6 +22,7 @@ import { useAlerts, useCases, useRodents } from "@/hooks/use-surveillance";
 import { REGIONS } from "@/lib/mock-data";
 import { isDemoMode } from "@/lib/demo-mode";
 import { relativeTime } from "@/lib/time";
+import { isPlottable } from "@/lib/geo";
 
 const labels: Record<string, string> = {
   "/": "VectorTrace",
@@ -34,7 +35,7 @@ const labels: Record<string, string> = {
 const ALERTS_READ_KEY = "vectortrace_alerts_last_read";
 
 export type MapFocusTarget =
-  | { type: "case"; id: string; lat: number; lng: number }
+  | { type: "case"; id: string; lat: number | null; lng: number | null }
   | { type: "rodent"; id: string; lat: number; lng: number }
   | { type: "region"; name: string; lat: number; lng: number };
 
@@ -285,7 +286,12 @@ export function TopBar({ onOpenMenu }: { onOpenMenu?: () => void }) {
                         aria-selected="false"
                         data-search-result
                         onClick={() =>
-                          focusOnMap({ type: "case", id: c.id, lat: c.lat, lng: c.lng })
+                          focusOnMap({
+                            type: "case",
+                            id: c.id,
+                            lat: c.lat,
+                            lng: c.lng,
+                          })
                         }
                         className="w-full flex items-center gap-2 px-2 py-1.5 rounded hover:bg-muted text-left"
                       >
@@ -293,6 +299,9 @@ export function TopBar({ onOpenMenu }: { onOpenMenu?: () => void }) {
                         <span className="font-mono font-semibold">{c.id}</span>
                         <span className="text-muted-foreground truncate flex-1">{c.region}</span>
                         <span className="text-[11px] font-medium">{c.status}</span>
+                        {!isPlottable(c) && (
+                          <span className="text-[10px] text-muted-foreground">Aggregate</span>
+                        )}
                       </button>
                     ))}
                   </div>

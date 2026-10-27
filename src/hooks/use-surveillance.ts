@@ -18,8 +18,8 @@ type DbAlert = Tables<"hanta_alerts">;
 const mapCase = (r: DbCase): Case => ({
   id: r.case_id,
   region: r.region,
-  lat: r.lat,
-  lng: r.lng,
+  lat: r.lat ?? null,
+  lng: r.lng ?? null,
   date: r.reported_at,
   syndrome: r.syndrome,
   status: r.status,

@@ -37,8 +37,8 @@ export type Database = {
           case_id: string;
           created_at: string;
           id: string;
-          lat: number;
-          lng: number;
+          lat: number | null;
+          lng: number | null;
           region: string;
           reported_at: string;
           status: Database["public"]["Enums"]["case_status"];
@@ -55,8 +55,8 @@ export type Database = {
           created_at: string;
           exposure: string | null;
           id: string;
-          lat: number;
-          lng: number;
+          lat: number | null;
+          lng: number | null;
           region: string;
           reported_at: string;
           sex: Database["public"]["Enums"]["case_sex"] | null;
@@ -70,8 +70,8 @@ export type Database = {
           created_at?: string;
           exposure?: string | null;
           id?: string;
-          lat: number;
-          lng: number;
+          lat?: number | null;
+          lng?: number | null;
           region: string;
           reported_at?: string;
           sex?: Database["public"]["Enums"]["case_sex"] | null;
@@ -85,8 +85,8 @@ export type Database = {
           created_at?: string;
           exposure?: string | null;
           id?: string;
-          lat?: number;
-          lng?: number;
+          lat?: number | null;
+          lng?: number | null;
           region?: string;
           reported_at?: string;
           sex?: Database["public"]["Enums"]["case_sex"] | null;

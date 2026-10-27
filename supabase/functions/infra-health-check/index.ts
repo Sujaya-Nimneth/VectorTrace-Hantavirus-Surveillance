@@ -11,30 +11,27 @@ const SERVICES = [
 ];
 
 const SUPABASE_URL = Deno.env.get("SUPABASE_URL") ?? "";
-const INGEST_TOKEN = Deno.env.get("INGEST_TOKEN");
-
-/** Constant-time bearer token check (compares SHA-256 digests). */
-async function tokensMatch(a: string, b: string): Promise<boolean> {
-  const enc = new TextEncoder();
-  const [da, db] = await Promise.all([
-    crypto.subtle.digest("SHA-256", enc.encode(a)),
-    crypto.subtle.digest("SHA-256", enc.encode(b)),
-  ]);
-  const va = new Uint8Array(da);
-  const vb = new Uint8Array(db);
-  let diff = 0;
-  for (let i = 0; i < va.length; i++) diff |= va[i] ^ vb[i];
-  return diff === 0;
-}
 
 async function authorize(req: Request): Promise<boolean> {
-  const expected = INGEST_TOKEN;
-  // Fail closed: without a configured token anyone could write bogus metrics.
-  if (!expected) return false;
   const auth = req.headers.get("authorization") ?? "";
-  const presented = auth.startsWith("Bearer ") ? auth.slice("Bearer ".length) : "";
+  const presented = auth.startsWith("Bearer ") ? auth.slice("Bearer ".length).trim() : "";
   if (!presented) return false;
-  return tokensMatch(presented, expected);
+
+  const supabaseUrl = Deno.env.get("SUPABASE_URL");
+  const supabaseKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
+  if (!supabaseUrl || !supabaseKey) return false;
+
+  // The token is stored in Vault and compared against a SHA-256 digest by a
+  // service-role-only RPC, so it never appears in function secrets or API data.
+  const verifier = createClient(supabaseUrl, supabaseKey);
+  const { data, error } = await verifier.rpc("verify_function_token", {
+    presented_token: presented,
+  });
+  if (error) {
+    console.error("verify_function_token failed", error);
+    return false;
+  }
+  return data === true;
 }
 
 function mapStatus(code: number | null, error: string | null) {
@@ -82,10 +79,7 @@ async function checkService(service: { name: string; url: string }) {
 Deno.serve(async (req) => {
   try {
     if (!(await authorize(req))) {
-      return new Response(
-        INGEST_TOKEN ? "Unauthorized" : "Unauthorized: INGEST_TOKEN secret is not configured",
-        { status: 401 },
-      );
+      return new Response("Unauthorized", { status: 401 });
     }
 
     const supabaseUrl = Deno.env.get("SUPABASE_URL");

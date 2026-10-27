@@ -19,6 +19,7 @@ import { DAY_MS } from "@/lib/time";
 import { cn } from "@/lib/utils";
 import { QueryError } from "@/components/QueryError";
 import { getMapTileConfig } from "@/lib/map-config";
+import { isPlottable } from "@/lib/geo";
 
 const mapTile = getMapTileConfig();
 
@@ -128,7 +129,7 @@ function MapController({
     try {
       if (search.case) {
         const found = casesRef.current.find((c) => c.id === search.case);
-        if (found) {
+        if (found && isPlottable(found)) {
           map.flyTo([found.lat, found.lng], 8, { duration: 0.8 });
           selectRef.current(found);
         }
@@ -163,7 +164,7 @@ const CaseDot = memo(function CaseDot({
   pulse,
   onSelect,
 }: {
-  c: Case;
+  c: Case & { lat: number; lng: number };
   pulse: boolean;
   onSelect: (c: Case) => void;
 }) {
@@ -223,26 +224,33 @@ export default function MapView() {
   const loading = casesLoading || rodentsLoading;
 
   const visibleCases = useMemo(() => {
-    return CASES.filter((c) => now - +new Date(c.date) <= range * DAY_MS);
+    return CASES.filter(
+      (c): c is Case & { lat: number; lng: number } =>
+        isPlottable(c) && now - +new Date(c.date) <= range * DAY_MS,
+    );
   }, [range, CASES, now]);
 
   const visibleRodents = useMemo(() => {
-    return RODENTS.filter((r) => now - +new Date(r.date) <= range * DAY_MS);
+    return RODENTS.filter((r) => isPlottable(r) && now - +new Date(r.date) <= range * DAY_MS);
   }, [range, RODENTS, now]);
 
   const points: [number, number][] = useMemo(
-    () => [...visibleCases, ...visibleRodents].map((p) => [p.lat, p.lng]),
+    () => [...visibleCases, ...visibleRodents].map((p) => [p.lat, p.lng] as [number, number]),
     [visibleCases, visibleRodents],
   );
 
   const heatPoints: [number, number, number][] = useMemo(
-    () => visibleCases.map((c) => [c.lat, c.lng, c.status === "Confirmed" ? 1 : 0.6]),
+    () =>
+      visibleCases.map(
+        (c) => [c.lat, c.lng, c.status === "Confirmed" ? 1 : 0.6] as [number, number, number],
+      ),
     [visibleCases],
   );
 
   const proxRodents = useMemo(() => {
     if (!selected) return [];
     return RODENTS.filter((r) => {
+      if (!isPlottable(selected)) return false;
       const d = haversine(selected.lat, selected.lng, r.lat, r.lng);
       return d < 5 && r.positivity > 30;
     });
@@ -303,8 +311,8 @@ export default function MapView() {
             <MapController
               points={points}
               range={range}
-              cases={CASES}
-              rodents={RODENTS}
+              cases={CASES.filter(isPlottable)}
+              rodents={RODENTS.filter(isPlottable)}
               onSelectCase={setSelected}
             />
             {layers.density && heatPoints.length > 0 && <HeatLayer points={heatPoints} />}
@@ -433,7 +441,11 @@ export default function MapView() {
                   <Field label="Reported" value={new Date(selected.date).toLocaleDateString()} />
                   <Field
                     label="Coords"
-                    value={`${selected.lat.toFixed(2)}, ${selected.lng.toFixed(2)}`}
+                    value={
+                      isPlottable(selected)
+                        ? `${selected.lat.toFixed(2)}, ${selected.lng.toFixed(2)}`
+                        : "Aggregate — no map location"
+                    }
                   />
                 </div>
 

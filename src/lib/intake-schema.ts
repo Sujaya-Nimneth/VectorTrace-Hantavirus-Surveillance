@@ -31,32 +31,45 @@ export const DEFAULT_INTAKE_FORM: IntakeForm = {
   exposure: "",
 };
 
-export const intakeSchema = z.object({
-  age: z
-    .string()
-    .refine(
-      (v) => v.trim() === "" || (Number.isInteger(Number(v)) && Number(v) >= 0 && Number(v) <= 120),
-      "Age must be a whole number between 0 and 120",
-    ),
-  sex: z.enum(["M", "F", ""]),
-  region: z.enum(REGION_NAMES, { message: "Region must be one of the known surveillance regions" }),
-  lat: z.string().refine((v) => {
-    const n = Number(v);
-    return Number.isFinite(n) && n >= -90 && n <= 90;
-  }, "Latitude must be between -90 and 90"),
-  lng: z.string().refine((v) => {
-    const n = Number(v);
-    return Number.isFinite(n) && n >= -180 && n <= 180;
-  }, "Longitude must be between -180 and 180"),
-  syndrome: z.enum(["HPS", "HFRS"]),
-  status: z.enum(["Pending", "Suspected", "Confirmed"]),
-  symptoms: z.array(z.enum(SYMPTOM_KEYS)).max(SYMPTOM_KEYS.length),
-  onsetDate: z
-    .string()
-    .refine((v) => v === "" || !Number.isNaN(new Date(v).getTime()), "Invalid onset date")
-    .refine(
-      (v) => v === "" || new Date(v).getTime() <= Date.now(),
-      "Onset date cannot be in the future",
-    ),
-  exposure: z.string().max(2000, "Exposure notes are limited to 2000 characters"),
-});
+export const intakeSchema = z
+  .object({
+    age: z
+      .string()
+      .refine(
+        (v) =>
+          v.trim() === "" || (Number.isInteger(Number(v)) && Number(v) >= 0 && Number(v) <= 120),
+        "Age must be a whole number between 0 and 120",
+      ),
+    sex: z.enum(["M", "F", ""]),
+    region: z.enum(REGION_NAMES, {
+      message: "Region must be one of the known surveillance regions",
+    }),
+    lat: z.string().refine((v) => {
+      const n = Number(v);
+      return Number.isFinite(n) && n >= -90 && n <= 90;
+    }, "Latitude must be between -90 and 90"),
+    lng: z.string().refine((v) => {
+      const n = Number(v);
+      return Number.isFinite(n) && n >= -180 && n <= 180;
+    }, "Longitude must be between -180 and 180"),
+    syndrome: z.enum(["HPS", "HFRS"]),
+    status: z.enum(["Pending", "Suspected", "Confirmed"]),
+    symptoms: z.array(z.enum(SYMPTOM_KEYS)).max(SYMPTOM_KEYS.length),
+    onsetDate: z
+      .string()
+      .refine((v) => v === "" || !Number.isNaN(new Date(v).getTime()), "Invalid onset date")
+      .refine(
+        (v) => v === "" || new Date(v).getTime() <= Date.now(),
+        "Onset date cannot be in the future",
+      ),
+    exposure: z.string().max(2000, "Exposure notes are limited to 2000 characters"),
+  })
+  .superRefine((value, ctx) => {
+    if (Number(value.lat) === 0 && Number(value.lng) === 0) {
+      ctx.addIssue({
+        code: "custom",
+        path: ["lat"],
+        message: "Latitude and longitude cannot both be zero",
+      });
+    }
+  });

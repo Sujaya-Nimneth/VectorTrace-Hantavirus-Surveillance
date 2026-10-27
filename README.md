@@ -23,7 +23,7 @@
 - **Geospatial tracker** — Leaflet map with a keyless Esri dark basemap, case markers, rodent reservoir sites, a case-density heat layer with legend, and shareable focus URLs (`/map?case=…`).
 - **Rapid case intake** — 4-step clinician workflow (demographics → clinical → exposure → review) with zod validation against controlled vocabularies, local drafts, and optimistic cache updates.
 - **Role-based access** — Supabase Auth with `admin` / `epidemiologist` / `viewer` roles enforced by Postgres RLS (the UI gates are convenience; the database is the enforcement layer).
-- **Automated ingestion** — a Supabase Edge Function scrapes WHO Disease Outbreak News via Firecrawl on a pg_cron schedule, normalizes and dedupes items, updates case statuses across runs, and raises alerts on confirmations.
+- **Automated ingestion** — a Supabase Edge Function scrapes WHO Disease Outbreak News via Firecrawl on a pg_cron schedule, normalizes and dedupes items, geocodes country-level reports with Open-Meteo, updates case statuses across runs, and raises alerts on confirmations.
 - **Admin observability console** — ingest success rates, external feed uptime, DB latency percentiles, and pool telemetry, code-split out of the main bundle.
 - **Demo mode** — with no credentials (or `VITE_DEMO_MODE=true`) the app serves a deterministic bundled dataset so the whole UI runs without a backend. Perfect for local dev and portfolio demos.
 - **Dark mode** — system-aware, persisted, no theme flash.
@@ -49,9 +49,10 @@
                 │                                              │
                 │  Edge Functions (Deno)                       │
                 │  ├── ingest-don-feed ── WHO DON via Firecrawl│
-                │  └── infra-health-check ── uptime + DB probe │
-                │        ▲ scheduled by pg_cron every 5 min /  │
-                │          twice daily, fail-closed bearer auth│
+                │  ├── infra-health-check ── uptime + DB probe │
+                │  └── geocode-case-locations ── map repair    │
+                │        ▲ scheduled by pg_cron; Vault-backed   │
+                │          bearer auth, fail-closed             │
                 └──────────────────────────────────────────────┘
 ```
 
@@ -79,8 +80,8 @@ That's it — without credentials the app boots in demo mode with a bundled data
 To connect a backend, create a `.env` from [`.env.example`](.env.example):
 
 - `VITE_SUPABASE_URL`, `VITE_SUPABASE_PUBLISHABLE_KEY` — client
-- `SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY` — server-only
-- `FIRECRAWL_API_KEY`, `INGEST_TOKEN` — edge function secrets (`supabase secrets set`)
+- `SUPABASE_URL`, `SUPABASE_PUBLISHABLE_KEY` — browser-safe Supabase client
+- `FIRECRAWL_API_KEY` — Edge Function secret (`supabase secrets set`)
 - `VITE_MAP_TILE_URL`, `VITE_MAP_TILE_ATTRIBUTION` — optional basemap provider override
 
 ### Quality gates
@@ -115,23 +116,36 @@ The checked-in config targets project `wsgbrwmgiyecsbpvpfpd`. For a new or forke
    ```bash
    supabase functions deploy ingest-don-feed
    supabase functions deploy infra-health-check
-   supabase secrets set FIRECRAWL_API_KEY=<KEY> INGEST_TOKEN=<TOKEN>
+   supabase functions deploy geocode-case-locations
+   supabase secrets set FIRECRAWL_API_KEY=<KEY>
    ```
 
-4. Schedule them via the `infra_config` values created by the cron migration. Use the **same** token for `INGEST_TOKEN` and both scheduler rows:
+4. Set the Functions base URL. The scheduler migration creates a random
+   `scheduler_token` in Supabase Vault, stores only its SHA-256 digest in
+   `infra_config`, and schedules both functions through a service-role-only
+   helper:
 
    ```sql
    insert into public.infra_config (key, value)
-   values
-     ('supabase_functions_base_url', 'https://<PROJECT_REF>.supabase.co/functions/v1'),
-     ('ingest_token', '<SAME_TOKEN_AS_INGEST_TOKEN_SECRET>'),
-     ('healthcheck_token', '<SAME_TOKEN_AS_INGEST_TOKEN_SECRET>')
+   values ('supabase_functions_base_url', 'https://<PROJECT_REF>.supabase.co/functions/v1')
    on conflict (key) do update set value = excluded.value;
    ```
 
-The edge functions fail closed: requests return `401` until `INGEST_TOKEN` is set and matches the `Authorization: Bearer ...` header. The cron jobs use the two `infra_config` token rows above.
+   Do not insert bearer tokens into `infra_config`. The Edge Functions fail
+   closed and validate requests through the service-role-only
+   `verify_function_token` RPC.
 
-The first user to sign up is auto-granted `admin`; everyone after gets `viewer`.
+5. To repair legacy `0,0` coordinates, trigger the maintenance function from
+   the SQL editor. The scheduler token is read directly from Vault and never
+   printed or stored in repository files:
+
+   ```sql
+   select public.invoke_scheduled_function('geocode-case-locations');
+   ```
+
+Signups are disabled in the checked-in Auth config. Create users from the
+Supabase dashboard; the first user is auto-granted `admin` and later users
+default to `viewer`.
 
 ## Roles & security model
 
@@ -142,7 +156,7 @@ The first user to sign up is auto-granted `admin`; everyone after gets `viewer`.
 | `viewer` (default) | Read surveillance data                                  |
 | anonymous          | Public projection only (no clinical columns), no writes |
 
-Security posture: RLS on every table with `WITH CHECK` clauses, check constraints on coordinates/age/positivity, constant-time bearer auth on edge functions (fail-closed without the token), query-cache wipe on sign-out, CSP + security headers in the Nginx config. See [SECURITY.md](SECURITY.md).
+Security posture: RLS on every table with `WITH CHECK` clauses, check constraints on coordinates/age/positivity, Vault-backed scheduler credentials verified by a service-role-only RPC, query-cache wipe on sign-out, and CSP + HSTS security headers on Workers and Nginx. See [SECURITY.md](SECURITY.md).
 
 ## Docker (optional self-host parity)
 

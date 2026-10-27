@@ -10,47 +10,41 @@
  *
  * Required secrets (set via Supabase Dashboard):
  *   FIRECRAWL_API_KEY           – Firecrawl bearer token
- *   INGEST_TOKEN                – bearer token that callers must present.
- *                                 The endpoint fails CLOSED while unset.
  *   SUPABASE_URL / SUPABASE_SERVICE_ROLE_KEY – auto-injected
  *
- * Scheduling is configured by the infra_cron_schedule migration (pg_cron
- * `ingest_don_twice_daily` at 02:00 and 14:00 UTC, reading its invocation URL
- * and token from public.infra_config).
+ * Bearer tokens are stored in Supabase Vault. The endpoint verifies callers
+ * through the service-role-only verify_function_token RPC and fails CLOSED.
  */
 
 // deno-lint-ignore-file
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { geocodeRegion, isPlottableCoordinates } from "../_shared/geocoding.ts";
 
 const FIRECRAWL_SCRAPE_ENDPOINT = "https://api.firecrawl.dev/v2/scrape";
 const SOURCE_URL = "https://www.who.int/emergencies/disease-outbreak-news";
 
 const INGEST_SOURCE = "WHO Disease Outbreak News";
-const INGEST_TOKEN = Deno.env.get("INGEST_TOKEN");
-
-/** Constant-time bearer token check (compares SHA-256 digests). */
-async function tokensMatch(a: string, b: string): Promise<boolean> {
-  const enc = new TextEncoder();
-  const [da, db] = await Promise.all([
-    crypto.subtle.digest("SHA-256", enc.encode(a)),
-    crypto.subtle.digest("SHA-256", enc.encode(b)),
-  ]);
-  const va = new Uint8Array(da);
-  const vb = new Uint8Array(db);
-  let diff = 0;
-  for (let i = 0; i < va.length; i++) diff |= va[i] ^ vb[i];
-  return diff === 0;
-}
 
 async function authorize(req: Request): Promise<boolean> {
-  const expected = INGEST_TOKEN;
-  // Fail closed: without a configured token the endpoint stays locked so
-  // anonymous callers can't burn Firecrawl credits.
-  if (!expected) return false;
   const auth = req.headers.get("authorization") ?? "";
-  const presented = auth.startsWith("Bearer ") ? auth.slice("Bearer ".length) : "";
+  const presented = auth.startsWith("Bearer ") ? auth.slice("Bearer ".length).trim() : "";
   if (!presented) return false;
-  return tokensMatch(presented, expected);
+
+  const supabaseUrl = Deno.env.get("SUPABASE_URL");
+  const supabaseKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
+  if (!supabaseUrl || !supabaseKey) return false;
+
+  // Verify through the service-role-only RPC; the raw token lives in Vault,
+  // never in Edge Function secrets or public.infra_config.
+  const verifier = createClient(supabaseUrl, supabaseKey);
+  const { data, error } = await verifier.rpc("verify_function_token", {
+    presented_token: presented,
+  });
+  if (error) {
+    console.error("verify_function_token failed", error);
+    return false;
+  }
+  return data === true;
 }
 
 type RawDonItem = {
@@ -88,18 +82,23 @@ function stableCaseId(seed: string): string {
   return `DON-${(h >>> 0).toString(36).toUpperCase().padStart(7, "0")}`;
 }
 
-function normalizeItem(
+async function normalizeItem(
   it: RawDonItem,
-): { ok: true; value: NormalizedCase } | { ok: false; reason: string } {
+): Promise<{ ok: true; value: NormalizedCase } | { ok: false; reason: string }> {
   const region = typeof it.region === "string" && it.region.trim() ? it.region.trim() : "Unknown";
 
-  const lat = it.lat;
-  const lng = it.lng;
-  if (typeof lat !== "number" || !Number.isFinite(lat) || lat < -90 || lat > 90) {
-    return { ok: false, reason: `item for ${region}: missing or invalid lat` };
+  let coordinates =
+    typeof it.lat === "number" &&
+    typeof it.lng === "number" &&
+    isPlottableCoordinates(it.lat, it.lng)
+      ? { lat: it.lat, lng: it.lng }
+      : null;
+
+  if (!coordinates) {
+    coordinates = await geocodeRegion(region);
   }
-  if (typeof lng !== "number" || !Number.isFinite(lng) || lng < -180 || lng > 180) {
-    return { ok: false, reason: `item for ${region}: missing or invalid lng` };
+  if (!coordinates) {
+    return { ok: false, reason: `item for ${region}: no plottable coordinates` };
   }
 
   let reportedAt = new Date().toISOString();
@@ -139,8 +138,8 @@ function normalizeItem(
     value: {
       case_id: caseId,
       region,
-      lat,
-      lng,
+      lat: coordinates.lat,
+      lng: coordinates.lng,
       reported_at: reportedAt,
       syndrome,
       status,
@@ -154,10 +153,7 @@ Deno.serve(async (req) => {
   let supabase: ReturnType<typeof createClient> | null = null;
   try {
     if (!(await authorize(req))) {
-      return new Response(
-        INGEST_TOKEN ? "Unauthorized" : "Unauthorized: INGEST_TOKEN secret is not configured",
-        { status: 401 },
-      );
+      return new Response("Unauthorized", { status: 401 });
     }
 
     const supabaseUrl = Deno.env.get("SUPABASE_URL");
@@ -295,7 +291,7 @@ Deno.serve(async (req) => {
     const rejected: string[] = [];
     const cases: NormalizedCase[] = [];
     for (const it of items) {
-      const res = normalizeItem(it);
+      const res = await normalizeItem(it);
       if (res.ok) cases.push(res.value);
       else rejected.push(res.reason);
     }

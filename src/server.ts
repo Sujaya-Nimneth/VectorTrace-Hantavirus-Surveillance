@@ -21,8 +21,33 @@ async function getServerEntry(): Promise<ServerEntry> {
 function brandedErrorResponse(): Response {
   return new Response(renderErrorPage(), {
     status: 500,
-    headers: { "content-type": "text/html; charset=utf-8" },
+    headers: securityHeaders({ "content-type": "text/html; charset=utf-8" }),
   });
+}
+
+const CONTENT_SECURITY_POLICY = [
+  "default-src 'self'",
+  "script-src 'self' 'unsafe-inline'",
+  "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com",
+  "font-src 'self' https://fonts.gstatic.com",
+  "img-src 'self' data: blob: https://*.arcgisonline.com",
+  "connect-src 'self' https://*.supabase.co wss://*.supabase.co",
+  "worker-src 'self'",
+  "frame-ancestors 'none'",
+  "base-uri 'self'",
+  "form-action 'self'",
+].join("; ");
+
+function securityHeaders(headers: HeadersInit = {}): Headers {
+  const out = new Headers(headers);
+  out.set("Content-Security-Policy", CONTENT_SECURITY_POLICY);
+  out.set("Cross-Origin-Opener-Policy", "same-origin");
+  out.set("Permissions-Policy", "camera=(), microphone=(), geolocation=()");
+  out.set("Referrer-Policy", "strict-origin-when-cross-origin");
+  out.set("Strict-Transport-Security", "max-age=31536000; includeSubDomains");
+  out.set("X-Content-Type-Options", "nosniff");
+  out.set("X-Frame-Options", "DENY");
+  return out;
 }
 
 function isCatastrophicSsrErrorBody(body: string, responseStatus: number): boolean {
@@ -66,12 +91,21 @@ async function normalizeCatastrophicSsrResponse(response: Response): Promise<Res
   return brandedErrorResponse();
 }
 
+function withSecurityHeaders(response: Response): Response {
+  const headers = securityHeaders(response.headers);
+  return new Response(response.body, {
+    status: response.status,
+    statusText: response.statusText,
+    headers,
+  });
+}
+
 export default {
   async fetch(request: Request, env: unknown, ctx: unknown) {
     try {
       const handler = await getServerEntry();
       const response = await handler.fetch(request, env, ctx);
-      return await normalizeCatastrophicSsrResponse(response);
+      return withSecurityHeaders(await normalizeCatastrophicSsrResponse(response));
     } catch (error) {
       console.error(error);
       return brandedErrorResponse();

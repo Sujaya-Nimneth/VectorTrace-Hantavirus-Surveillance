@@ -26,6 +26,7 @@ coverage/
 # Wrangler / Cloudflare
 .wrangler/
 .dev.vars
+.cloudflare/
 
 # Supabase CLI local state
 supabase/.temp/

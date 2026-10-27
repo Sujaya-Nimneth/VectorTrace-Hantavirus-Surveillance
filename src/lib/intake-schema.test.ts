@@ -45,6 +45,11 @@ describe("intakeSchema", () => {
     );
   });
 
+  it("rejects the zero-coordinate map sentinel", () => {
+    const result = intakeSchema.safeParse({ ...DEFAULT_INTAKE_FORM, lat: "0", lng: "0" });
+    expect(result.success).toBe(false);
+  });
+
   it("rejects symptoms outside the clinical vocabulary", () => {
     expect(
       intakeSchema.safeParse({ ...DEFAULT_INTAKE_FORM, symptoms: ["fever", "sneezing"] }).success,

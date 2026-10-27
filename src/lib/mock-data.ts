@@ -1,8 +1,8 @@
 export type Case = {
   id: string;
   region: string;
-  lat: number;
-  lng: number;
+  lat: number | null;
+  lng: number | null;
   date: string;
   syndrome: "HPS" | "HFRS";
   status: "Confirmed" | "Suspected" | "Pending";
