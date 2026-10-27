@@ -1,6 +1,6 @@
 # VectorTrace — Hantavirus Surveillance Command Center
 
-[![CI & Deploy](https://github.com/Sujaya-Nimneth/VectorTrace-Hantavirus-Surveillance/actions/workflows/deploy.yml/badge.svg)](https://github.com/Sujaya-Nimneth/VectorTrace-Hantavirus-Surveillance/actions/workflows/deploy.yml)
+[![CI](https://github.com/Sujaya-Nimneth/VectorTrace-Hantavirus-Surveillance/actions/workflows/deploy.yml/badge.svg)](https://github.com/Sujaya-Nimneth/VectorTrace-Hantavirus-Surveillance/actions/workflows/deploy.yml)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 [![Node](https://img.shields.io/badge/node-22+-339933?logo=node.js&logoColor=white)](.nvmrc)
 <!-- Update the href with your workers.dev account subdomain after the first deploy -->
@@ -153,7 +153,7 @@ docker compose --profile scheduler up   # opt-in Docker scheduler (pg_cron is th
 
 ## CI/CD
 
-GitHub Actions runs lint, typecheck, tests with coverage, and a build on every PR, then deploys to **Cloudflare Workers** on pushes to `main` (wrangler pinned in devDependencies; deploy reuses the verified build artifact). Configure the repository secrets listed in `.env.example` plus `CLOUDFLARE_API_TOKEN` / `CLOUDFLARE_ACCOUNT_ID`.
+GitHub Actions runs lint, typecheck, tests with coverage, and a build on every PR and push. **Cloudflare Workers Builds** owns production deployment from `main`, so no Cloudflare credentials are stored in GitHub. Configure production environment variables in Cloudflare and optional build-time `VITE_*` values in GitHub.
 
 ## Roadmap
 
