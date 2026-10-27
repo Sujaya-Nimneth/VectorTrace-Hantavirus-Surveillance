@@ -5,7 +5,7 @@
 [![Node](https://img.shields.io/badge/node-22+-339933?logo=node.js&logoColor=white)](.nvmrc)
 <!-- Update the href with your workers.dev account subdomain after the first deploy -->
 
-[![Live Demo](https://img.shields.io/badge/live-demo-ff5722?logo=cloudflareworkers&logoColor=white)](https://vectortrace-hantavirus-surveillance.workers.dev)
+[![Live Demo](https://img.shields.io/badge/live-demo-ff5722?logo=cloudflareworkers&logoColor=white)](https://vectortrace-hantavirus-surveillance.sujayanimneth.workers.dev)
 
 **VectorTrace** is a real-time epidemiological surveillance platform for hantavirus. It combines a command-center dashboard, geospatial risk mapping, a role-gated rapid case intake workflow, and an automated WHO Disease Outbreak News ingestion pipeline — backed by Supabase (Postgres + RLS + Edge Functions) and deployed to Cloudflare Workers.
 
@@ -167,7 +167,7 @@ docker compose --profile scheduler up   # opt-in Docker scheduler (pg_cron is th
 
 ## CI/CD
 
-GitHub Actions runs lint, typecheck, tests with coverage, and a build on every PR and push. **Cloudflare Workers Builds** owns production deployment from `main`, so no Cloudflare credentials are stored in GitHub. Configure production environment variables in Cloudflare and optional build-time `VITE_*` values in GitHub.
+GitHub Actions runs lint, typecheck, tests with coverage, and a build on every PR and push. **Cloudflare Workers Builds** owns production deployment from `main` with the deploy command `npx cf deploy`, so no Cloudflare credentials are stored in GitHub. Configure production environment variables in Cloudflare and optional build-time `VITE_*` values in GitHub.
 
 ## Roadmap
 
