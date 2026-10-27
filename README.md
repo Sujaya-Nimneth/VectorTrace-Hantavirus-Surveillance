@@ -2,8 +2,9 @@
 
 [![CI & Deploy](https://github.com/Sujaya-Nimneth/VectorTrace-Hantavirus-Surveillance/actions/workflows/deploy.yml/badge.svg)](https://github.com/Sujaya-Nimneth/VectorTrace-Hantavirus-Surveillance/actions/workflows/deploy.yml)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
-[![Node](https://img.shields.io/badge/node-20+-339933?logo=node.js&logoColor=white)](.nvmrc)
+[![Node](https://img.shields.io/badge/node-22+-339933?logo=node.js&logoColor=white)](.nvmrc)
 <!-- Update the href with your workers.dev account subdomain after the first deploy -->
+
 [![Live Demo](https://img.shields.io/badge/live-demo-ff5722?logo=cloudflareworkers&logoColor=white)](https://vectortrace-hantavirus-surveillance.workers.dev)
 
 **VectorTrace** is a real-time epidemiological surveillance platform for hantavirus. It combines a command-center dashboard, geospatial risk mapping, a role-gated rapid case intake workflow, and an automated WHO Disease Outbreak News ingestion pipeline — backed by Supabase (Postgres + RLS + Edge Functions) and deployed to Cloudflare Workers.
@@ -12,14 +13,14 @@
 
 ![VectorTrace demo](docs/screenshots/demo.gif)
 
-| Dashboard (dark) | Dashboard (light) | Geospatial tracker |
-| :---: | :---: | :---: |
+|                        Dashboard (dark)                        |                        Dashboard (light)                         |                  Geospatial tracker                  |
+| :------------------------------------------------------------: | :--------------------------------------------------------------: | :--------------------------------------------------: |
 | ![Dashboard in dark mode](docs/screenshots/dashboard-dark.png) | ![Dashboard in light mode](docs/screenshots/dashboard-light.png) | ![Geospatial tracker](docs/screenshots/map-dark.png) |
 
 ## Highlights
 
 - **Executive dashboard** — live case metrics with trend deltas, stacked epidemic curve (7/30/90-day windows), severity-filtered alerts feed, and a regional risk ranking with sorting, filtering, and CSV export.
-- **Geospatial tracker** — Leaflet map with case markers, rodent reservoir sites, a case-density heat layer with legend, and shareable focus URLs (`/map?case=…`).
+- **Geospatial tracker** — Leaflet map with a keyless Esri dark basemap, case markers, rodent reservoir sites, a case-density heat layer with legend, and shareable focus URLs (`/map?case=…`).
 - **Rapid case intake** — 4-step clinician workflow (demographics → clinical → exposure → review) with zod validation against controlled vocabularies, local drafts, and optimistic cache updates.
 - **Role-based access** — Supabase Auth with `admin` / `epidemiologist` / `viewer` roles enforced by Postgres RLS (the UI gates are convenience; the database is the enforcement layer).
 - **Automated ingestion** — a Supabase Edge Function scrapes WHO Disease Outbreak News via Firecrawl on a pg_cron schedule, normalizes and dedupes items, updates case statuses across runs, and raises alerts on confirmations.
@@ -58,13 +59,13 @@
 
 ## Tech stack
 
-| Layer | Choices |
-| --- | --- |
-| UI | React 19, TanStack Start + Router, Tailwind CSS 4, lucide-react, sonner |
-| Data | TanStack Query v5, Supabase JS v2, Realtime channels, zod |
-| Visualization | Recharts (epidemic curve, latency), Leaflet + leaflet.heat (map) |
-| Backend | Supabase Postgres with RLS, Edge Functions (Deno), pg_cron |
-| Infra | Cloudflare Workers (wrangler), Docker + Nginx (self-host parity), GitHub Actions |
+| Layer         | Choices                                                                          |
+| ------------- | -------------------------------------------------------------------------------- |
+| UI            | React 19, TanStack Start + Router, Tailwind CSS 4, lucide-react, sonner          |
+| Data          | TanStack Query v5, Supabase JS v2, Realtime channels, zod                        |
+| Visualization | Recharts (epidemic curve, latency), Leaflet + leaflet.heat (map)                 |
+| Backend       | Supabase Postgres with RLS, Edge Functions (Deno), pg_cron                       |
+| Infra         | Cloudflare Workers (wrangler), Docker + Nginx (self-host parity), GitHub Actions |
 
 ## Quick start
 
@@ -80,6 +81,7 @@ To connect a backend, create a `.env` from [`.env.example`](.env.example):
 - `VITE_SUPABASE_URL`, `VITE_SUPABASE_PUBLISHABLE_KEY` — client
 - `SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY` — server-only
 - `FIRECRAWL_API_KEY`, `INGEST_TOKEN` — edge function secrets (`supabase secrets set`)
+- `VITE_MAP_TILE_URL`, `VITE_MAP_TILE_ATTRIBUTION` — optional basemap provider override
 
 ### Quality gates
 
@@ -133,12 +135,12 @@ The first user to sign up is auto-granted `admin`; everyone after gets `viewer`.
 
 ## Roles & security model
 
-| Role | Capabilities |
-| --- | --- |
-| `admin` | Everything + role management + infrastructure console |
-| `epidemiologist` | Insert/update clinical cases and alerts |
-| `viewer` (default) | Read surveillance data |
-| anonymous | Public projection only (no clinical columns), no writes |
+| Role               | Capabilities                                            |
+| ------------------ | ------------------------------------------------------- |
+| `admin`            | Everything + role management + infrastructure console   |
+| `epidemiologist`   | Insert/update clinical cases and alerts                 |
+| `viewer` (default) | Read surveillance data                                  |
+| anonymous          | Public projection only (no clinical columns), no writes |
 
 Security posture: RLS on every table with `WITH CHECK` clauses, check constraints on coordinates/age/positivity, constant-time bearer auth on edge functions (fail-closed without the token), query-cache wipe on sign-out, CSP + security headers in the Nginx config. See [SECURITY.md](SECURITY.md).
 

@@ -18,6 +18,9 @@ import { useNavigate, useSearch } from "@tanstack/react-router";
 import { DAY_MS } from "@/lib/time";
 import { cn } from "@/lib/utils";
 import { QueryError } from "@/components/QueryError";
+import { getMapTileConfig } from "@/lib/map-config";
+
+const mapTile = getMapTileConfig();
 
 type HeatLayerInstance = L.Layer & {
   setLatLngs: (latlngs: [number, number, number][]) => HeatLayerInstance;
@@ -293,8 +296,9 @@ export default function MapView() {
             style={{ background: "var(--map-canvas)" }}
           >
             <TileLayer
-              attribution="&copy; OpenStreetMap, &copy; CARTO"
-              url="https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png"
+              attribution={mapTile.attribution}
+              url={mapTile.url}
+              maxNativeZoom={mapTile.maxNativeZoom}
             />
             <MapController
               points={points}
