@@ -126,6 +126,8 @@ export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()(
 });
 
 function RootShell({ children }: { children: React.ReactNode }) {
+  const { theme } = useTheme();
+
   return (
     <html lang="en" suppressHydrationWarning>
       <head>
@@ -138,7 +140,13 @@ function RootShell({ children }: { children: React.ReactNode }) {
         />
       </head>
       <body>
-        {children}
+        <Theme theme={themes[defaultThemeSlug]} mode={theme}>
+          <LinkProvider
+            component={RouterLinkAdapter as ComponentProps<typeof LinkProvider>["component"]}
+          >
+            {children}
+          </LinkProvider>
+        </Theme>
         <Scripts />
       </body>
     </html>
@@ -147,20 +155,13 @@ function RootShell({ children }: { children: React.ReactNode }) {
 
 function RootComponent() {
   const { queryClient } = Route.useRouteContext();
-  const { theme } = useTheme();
 
   return (
-    <Theme theme={themes[defaultThemeSlug]} mode={theme}>
-      <LinkProvider
-        component={RouterLinkAdapter as ComponentProps<typeof LinkProvider>["component"]}
-      >
-        <QueryClientProvider client={queryClient}>
-          <AuthProvider>
-            <AppLayout />
-            <Toaster position="bottom-right" richColors closeButton />
-          </AuthProvider>
-        </QueryClientProvider>
-      </LinkProvider>
-    </Theme>
+    <QueryClientProvider client={queryClient}>
+      <AuthProvider>
+        <AppLayout />
+        <Toaster position="bottom-right" richColors closeButton />
+      </AuthProvider>
+    </QueryClientProvider>
   );
 }

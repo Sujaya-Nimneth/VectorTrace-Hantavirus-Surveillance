@@ -10,6 +10,7 @@ import {
 import { useQueryClient } from "@tanstack/react-query";
 import type { Session, User } from "@supabase/supabase-js";
 import { supabase } from "@/integrations/supabase/client";
+import { isDemoMode } from "@/lib/demo-mode";
 
 type AuthCtx = {
   session: Session | null;
@@ -27,10 +28,11 @@ const Ctx = createContext<AuthCtx>({
 
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [session, setSession] = useState<Session | null>(null);
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(() => !isDemoMode());
   const queryClient = useQueryClient();
 
   useEffect(() => {
+    if (isDemoMode()) return;
     const { data: sub } = supabase.auth.onAuthStateChange((_evt, s) => {
       setSession(s);
     });
@@ -44,7 +46,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   // Clearing the query cache on sign-out prevents the next user on a shared
   // machine from seeing cached roles and surveillance data from this session.
   const signOut = useCallback(async () => {
-    await supabase.auth.signOut();
+    if (!isDemoMode()) {
+      await supabase.auth.signOut();
+    }
+    setSession(null);
     queryClient.removeQueries();
   }, [queryClient]);
 
