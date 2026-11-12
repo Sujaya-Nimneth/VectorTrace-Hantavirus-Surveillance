@@ -7,26 +7,33 @@
 
 [![Live Demo](https://img.shields.io/badge/live-demo-ff5722?logo=cloudflareworkers&logoColor=white)](https://vectortrace-hantavirus-surveillance.sujayanimneth.workers.dev)
 
-**VectorTrace** is a real-time epidemiological surveillance platform for hantavirus. It combines a command-center dashboard, geospatial risk mapping, a role-gated rapid case intake workflow, and an automated WHO Disease Outbreak News ingestion pipeline — backed by Supabase (Postgres + RLS + Edge Functions) and deployed to Cloudflare Workers.
+**VectorTrace** is a real-time epidemiological surveillance platform for hantavirus. It pairs a public overview with an operational surveillance workspace — analytics dashboard, geospatial risk map, 4-step rapid case intake, and an automated WHO Disease Outbreak News ingestion pipeline backed by Supabase (Postgres + RLS + Edge Functions) and Cloudflare Workers.
 
-**A 15-second tour** — landing page → dashboard (light → dark) → geospatial tracker:
+### Screenshots
 
-![VectorTrace demo](docs/screenshots/demo.gif)
+|                      Public overview (dark)                       |                        Dashboard (dark)                        |
+| :---------------------------------------------------------------: | :------------------------------------------------------------: |
+| ![VectorTrace public overview](docs/screenshots/landing-dark.png) | ![Dashboard in dark mode](docs/screenshots/dashboard-dark.png) |
 
-|                        Dashboard (dark)                        |                        Dashboard (light)                         |                  Geospatial tracker                  |
-| :------------------------------------------------------------: | :--------------------------------------------------------------: | :--------------------------------------------------: |
-| ![Dashboard in dark mode](docs/screenshots/dashboard-dark.png) | ![Dashboard in light mode](docs/screenshots/dashboard-light.png) | ![Geospatial tracker](docs/screenshots/map-dark.png) |
+|                        Dashboard (light)                         |                    Geospatial tracker                    |
+| :--------------------------------------------------------------: | :------------------------------------------------------: |
+| ![Dashboard in light mode](docs/screenshots/dashboard-light.png) | ![Geospatial cluster map](docs/screenshots/map-dark.png) |
+
+|                      Operator sign-in                       |
+| :---------------------------------------------------------: |
+| ![Operator authentication](docs/screenshots/login-dark.png) |
 
 ## Highlights
 
-- **Executive dashboard** — live case metrics with trend deltas, stacked epidemic curve (7/30/90-day windows), severity-filtered alerts feed, and a regional risk ranking with sorting, filtering, and CSV export.
-- **Geospatial tracker** — Leaflet map with a keyless Esri dark basemap, case markers, rodent reservoir sites, a case-density heat layer with legend, and shareable focus URLs (`/map?case=…`).
-- **Rapid case intake** — 4-step clinician workflow (demographics → clinical → exposure → review) with zod validation against controlled vocabularies, local drafts, and optimistic cache updates.
-- **Role-based access** — Supabase Auth with `admin` / `epidemiologist` / `viewer` roles enforced by Postgres RLS (the UI gates are convenience; the database is the enforcement layer).
-- **Automated ingestion** — a Supabase Edge Function scrapes WHO Disease Outbreak News via Firecrawl on a pg_cron schedule, normalizes and dedupes items, geocodes country-level reports with Open-Meteo, updates case statuses across runs, and raises alerts on confirmations.
-- **Admin observability console** — ingest success rates, external feed uptime, DB latency percentiles, and pool telemetry, code-split out of the main bundle.
-- **Demo mode** — with no credentials (or `VITE_DEMO_MODE=true`) the app serves a deterministic bundled dataset so the whole UI runs without a backend. Perfect for local dev and portfolio demos.
-- **Dark mode** — system-aware, persisted, no theme flash.
+- **Public corridor snapshot** — `/` greets unauthenticated visitors with live regional corridor metrics (`Corridors` / `Recent cases` toggle) and direct entry points into surveillance workflows.
+- **Surveillance dashboard** — `/dashboard` presents a 30-day KPI strip with prior-period deltas, multi-region linear epidemic curve (`7D` / `30D` / `90D`), severity-filtered alerts feed, and sortable/filterable regional incidence table (`per 100k`) with CSV export.
+- **Geospatial proximity tracker** — `/map` renders a keyless Esri dark/light basemap with confirmed/suspected/pending case markers, _Sigmodontinae_ rodent reservoir sites, density heat overlay, docked region/layer controls, and an interactive slide-over drawer calculating `≤ 5 km` Haversine overlaps.
+- **Global command palette & alerts** — `⌘K` / `Ctrl+K` quick jump across pages, corridors, cases, and trap sites from the top bar alongside a live alerts popover and persisted light/dark mode.
+- **Rapid case intake** — `/intake` provides a 4-step clinician workflow (demographics → clinical onset → exposure context → review) with zod validation against controlled vocabularies, browser draft persistence, and optimistic query updates.
+- **Role-based access** — Supabase Auth with `admin` / `epidemiologist` / `viewer` roles enforced by Postgres RLS (UI route guards are convenience; Postgres RLS is the enforcement layer).
+- **Automated ingestion** — Supabase Edge Functions scrape WHO Disease Outbreak News via Firecrawl on a `pg_cron` schedule, normalize and deduplicate records, geocode country-level reports with Open-Meteo, update case statuses across runs, and raise confirmation alerts.
+- **Admin observability console** — `/admin` tracks ingest health telemetry, external feed response latencies, database query latency against a `220ms` SLO threshold, and severity-filterable system feed logs (code-split out of the main bundle).
+- **Demo mode** — Without backend credentials (or with `VITE_DEMO_MODE=true`), the app serves a deterministic bundled dataset across every view.
 
 ## Architecture
 
@@ -34,9 +41,11 @@
                 ┌──────────────────────────────────────────────┐
                 │                Cloudflare Workers            │
                 │  TanStack Start (React 19, SSR) + Vite       │
-                │  ├── /            Executive dashboard        │
+                │  ├── /            Public overview & snapshot │
+                │  ├── /dashboard   Surveillance KPIs & trends │
                 │  ├── /map         Geospatial tracker (lazy)  │
                 │  ├── /intake      Case intake (clinicians)   │
+                │  ├── /login       Operator authentication    │
                 │  └── /admin       Infra console (admin, lazy)│
                 └───────────────┬──────────────────────────────┘
                                 │ Supabase JS (public view / authed RLS)
@@ -60,13 +69,13 @@
 
 ## Tech stack
 
-| Layer         | Choices                                                                          |
-| ------------- | -------------------------------------------------------------------------------- |
-| UI            | React 19, TanStack Start + Router, Tailwind CSS 4, lucide-react, sonner          |
-| Data          | TanStack Query v5, Supabase JS v2, Realtime channels, zod                        |
-| Visualization | Recharts (epidemic curve, latency), Leaflet + leaflet.heat (map)                 |
-| Backend       | Supabase Postgres with RLS, Edge Functions (Deno), pg_cron                       |
-| Infra         | Cloudflare Workers (wrangler), Docker + Nginx (self-host parity), GitHub Actions |
+| Layer         | Choices                                                                             |
+| ------------- | ----------------------------------------------------------------------------------- |
+| UI            | React 19, TypeScript, TanStack Start + Router, Tailwind CSS 4, lucide-react, sonner |
+| Data          | TanStack Query v5, Supabase JS v2, Realtime channels, zod                           |
+| Visualization | Recharts (epidemic curve, latency SLO), Leaflet + leaflet.heat (map)                |
+| Backend       | Supabase Postgres with RLS, Edge Functions (Deno), pg_cron                          |
+| Infra         | Cloudflare Workers (wrangler), Docker + Nginx (self-host parity), GitHub Actions    |
 
 ## Quick start
 
