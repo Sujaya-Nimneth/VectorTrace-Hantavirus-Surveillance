@@ -1,5 +1,14 @@
+import { FormLayout } from "@astryxdesign/core/FormLayout";
+import { RadioList, RadioListItem } from "@astryxdesign/core/RadioList";
+import { DateInput, type DateInputProps } from "@astryxdesign/core/DateInput";
+import { Grid } from "@astryxdesign/core/Grid";
+import { SelectableCard } from "@astryxdesign/core/SelectableCard";
+import { HStack } from "@astryxdesign/core/HStack";
+import { VStack } from "@astryxdesign/core/VStack";
+import { Icon } from "@astryxdesign/core/Icon";
+import { Text } from "@astryxdesign/core/Text";
+
 import { SYMPTOMS } from "@/lib/intake-data";
-import { cn } from "@/lib/utils";
 
 type Step2Props = {
   syndrome: "HPS" | "HFRS";
@@ -11,113 +20,70 @@ type Step2Props = {
 export function Step2Clinical({ syndrome, symptoms, onsetDate, onChange }: Step2Props) {
   const sympSet = new Set(symptoms);
 
-  const toggle = (k: string) => {
+  const toggle = (k: string, checked: boolean) => {
     const next = new Set(sympSet);
-    if (next.has(k)) {
-      next.delete(k);
-    } else {
+    if (checked) {
       next.add(k);
+    } else {
+      next.delete(k);
     }
     onChange({ symptoms: Array.from(next) });
   };
 
   return (
-    <div className="space-y-6">
-      <div>
-        <label htmlFor="intake-onset" className="block text-[12px] font-semibold mb-2">
-          Symptom onset date
-        </label>
-        <input
-          id="intake-onset"
-          type="date"
-          value={onsetDate}
-          onChange={(e) => onChange({ onsetDate: e.target.value })}
-          className="w-full md:w-auto h-10 px-3 rounded-md border border-input bg-card text-[13px] focus:outline-none focus:ring-2 focus:ring-ring"
+    <FormLayout>
+      <RadioList
+        label="Clinical syndrome"
+        orientation="horizontal"
+        value={syndrome}
+        onChange={(val) => onChange({ syndrome: val as "HPS" | "HFRS" })}
+      >
+        <RadioListItem
+          value="HPS"
+          label="HPS — Pulmonary"
+          description="Hantavirus Pulmonary Syndrome"
         />
-      </div>
+        <RadioListItem
+          value="HFRS"
+          label="HFRS — Renal"
+          description="Hemorrhagic Fever with Renal Syndrome"
+        />
+      </RadioList>
 
-      <fieldset>
-        <legend className="block text-[12px] font-semibold mb-2">Reported symptoms</legend>
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2">
+      <DateInput
+        label="Symptom onset date"
+        isOptional
+        description="Leave unset to record today's date upon submission."
+        value={onsetDate ? (onsetDate as DateInputProps["value"]) : undefined}
+        onChange={(val) => onChange({ onsetDate: val ?? "" })}
+      />
+
+      <VStack gap={2}>
+        <Text type="label" weight="medium">
+          Observed clinical symptoms (optional)
+        </Text>
+        <Grid columns={{ minWidth: 200, max: 2, repeat: "fit" }} gap={2}>
           {SYMPTOMS.map((s) => {
-            const on = sympSet.has(s.k);
-            const Icon = s.icon;
+            const active = sympSet.has(s.k);
             return (
-              <button
+              <SelectableCard
                 key={s.k}
-                type="button"
-                aria-pressed={on}
-                onClick={() => toggle(s.k)}
-                className={cn(
-                  "flex items-center gap-3 px-3.5 py-3 rounded-md border text-[13px] transition-all text-left",
-                  on
-                    ? "border-primary bg-primary/5 text-primary font-semibold ring-2 ring-primary/15"
-                    : "border-border hover:border-primary/40 hover:bg-muted/40",
-                )}
+                label={s.label}
+                isSelected={active}
+                onChange={(checked) => toggle(s.k, checked)}
+                padding={3}
               >
-                <div
-                  className={cn(
-                    "size-8 rounded grid place-items-center",
-                    on ? "bg-primary text-primary-foreground" : "bg-muted text-muted-foreground",
-                  )}
-                >
-                  <Icon className="size-4" />
-                </div>
-                <span className="flex-1">{s.label}</span>
-                <div
-                  className={cn(
-                    "size-4 rounded border grid place-items-center",
-                    on ? "border-primary bg-primary text-primary-foreground" : "border-border",
-                  )}
-                >
-                  {on && <span className="text-[10px]">✓</span>}
-                </div>
-              </button>
+                <HStack gap={2} align="center">
+                  <Icon icon={s.icon} size="sm" color={active ? "accent" : "secondary"} />
+                  <Text type="body" weight="medium">
+                    {s.label}
+                  </Text>
+                </HStack>
+              </SelectableCard>
             );
           })}
-        </div>
-      </fieldset>
-
-      <fieldset>
-        <legend className="block text-[12px] font-semibold mb-2">Syndrome suspected</legend>
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 max-w-md">
-          {(
-            [
-              { k: "HPS", title: "HPS", sub: "Hantavirus Pulmonary Syndrome" },
-              { k: "HFRS", title: "HFRS", sub: "Hemorrhagic Fever w/ Renal Syndrome" },
-            ] as const
-          ).map((o) => {
-            const on = syndrome === o.k;
-            return (
-              <button
-                key={o.k}
-                type="button"
-                aria-pressed={on}
-                onClick={() => onChange({ syndrome: o.k })}
-                className={cn(
-                  "p-4 rounded-md border text-left transition-all",
-                  on
-                    ? "border-teal bg-teal/5 ring-2 ring-teal/20"
-                    : "border-border hover:border-teal/40",
-                )}
-              >
-                <div className="flex items-center gap-2 mb-1">
-                  <div
-                    className={cn(
-                      "size-4 rounded-full border-2 grid place-items-center",
-                      on ? "border-teal" : "border-border",
-                    )}
-                  >
-                    {on && <div className="size-1.5 rounded-full bg-teal" />}
-                  </div>
-                  <div className="font-bold text-[14px]">{o.title}</div>
-                </div>
-                <div className="text-[11px] text-muted-foreground ml-6">{o.sub}</div>
-              </button>
-            );
-          })}
-        </div>
-      </fieldset>
-    </div>
+        </Grid>
+      </VStack>
+    </FormLayout>
   );
 }

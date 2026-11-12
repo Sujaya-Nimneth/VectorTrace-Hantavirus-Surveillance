@@ -1,66 +1,80 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { lazy, Suspense } from "react";
-import { Loader2, ShieldOff } from "lucide-react";
+import { ShieldAlert, UserCheck } from "lucide-react";
+import { Center } from "@astryxdesign/core/Center";
+import { Layout } from "@astryxdesign/core/Layout";
+import { Skeleton } from "@astryxdesign/core/Skeleton";
+import { Spinner } from "@astryxdesign/core/Spinner";
+import { VStack } from "@astryxdesign/core/VStack";
+
 import { useAuth } from "@/hooks/use-auth";
 import { useRoles } from "@/hooks/use-roles";
 import { requireAuth } from "@/lib/auth-gate";
 import { QueryError } from "@/components/QueryError";
 import { GateCard } from "@/components/GateCard";
 
-// The console (recharts + panels) loads only after the role gate passes,
-// keeping it out of every other route's bundle.
-const AdminConsole = lazy(() => import("@/components/admin/AdminConsole"));
+const AdminConsole = lazy(() =>
+  import("@/components/admin/AdminConsole").then((m) => ({ default: m.AdminConsole })),
+);
 
 export const Route = createFileRoute("/admin")({
-  component: AdminGate,
+  component: Admin,
   beforeLoad: async ({ location }) => requireAuth(location.href),
   head: () => ({ meta: [{ title: "System Infrastructure · VectorTrace" }] }),
 });
 
-function AdminGate() {
-  const { user, loading: authLoading } = useAuth();
+function Admin() {
+  const { user, loading } = useAuth();
   const { isAdmin, error: rolesError, loading: rolesLoading } = useRoles();
 
-  if (authLoading || (user && rolesLoading)) {
+  if (loading || rolesLoading) {
     return (
-      <div className="h-full grid place-items-center text-muted-foreground p-12">
-        <Loader2 className="size-5 animate-spin" />
-      </div>
+      <Layout padding={6} contentWidth={1360} height="auto">
+        <VStack gap={4}>
+          <Skeleton width="35%" height={32} />
+          <Skeleton width="100%" height={120} />
+          <Skeleton width="100%" height={280} />
+        </VStack>
+      </Layout>
     );
   }
+
   if (!user) {
     return (
       <GateCard
-        icon={ShieldOff}
-        title="Authentication required"
-        body="The infrastructure console is restricted to admin users."
-        action={{ to: "/login", label: "Sign in", primary: true }}
+        icon={UserCheck}
+        title="Sign in required"
+        body="Sign in with an administrator account to access infrastructure diagnostics."
+        action={{ to: "/login", label: "Go to sign in", primary: true }}
       />
     );
   }
+
   if (rolesError) {
     return (
-      <div className="p-12 max-w-md mx-auto">
+      <Layout padding={6} contentWidth={1360} height="auto">
         <QueryError what="your roles" error={rolesError} onRetry={() => window.location.reload()} />
-      </div>
+      </Layout>
     );
   }
+
   if (!isAdmin) {
     return (
       <GateCard
-        icon={ShieldOff}
-        title="Insufficient privileges"
-        body={`Account ${user.email} doesn't hold the admin role required for this console.`}
+        icon={ShieldAlert}
+        title="Administrator role required"
+        body="This console is restricted to platform administrators."
         action={{ to: "/dashboard", label: "Back to dashboard" }}
       />
     );
   }
+
   return (
     <Suspense
       fallback={
-        <div className="h-full grid place-items-center text-muted-foreground p-12">
-          <Loader2 className="size-5 animate-spin" />
-        </div>
+        <Center minHeight="60vh" padding={6}>
+          <Spinner size="lg" label="Loading infrastructure console…" />
+        </Center>
       }
     >
       <AdminConsole />

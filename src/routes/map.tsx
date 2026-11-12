@@ -1,14 +1,11 @@
-import { createFileRoute } from "@tanstack/react-router";
+import { ClientOnly, createFileRoute } from "@tanstack/react-router";
 import { lazy, Suspense } from "react";
-import { ClientOnly } from "@tanstack/react-router";
+import { Center } from "@astryxdesign/core/Center";
+import { Spinner } from "@astryxdesign/core/Spinner";
 
-const MapView = lazy(() => import("@/components/MapView"));
+const MapView = lazy(() => import("@/components/MapView").then((m) => ({ default: m.MapView })));
 
-export type MapSearch = {
-  case?: string;
-  site?: string;
-  region?: string;
-};
+export type MapSearch = { case?: string; site?: string; region?: string };
 
 export const Route = createFileRoute("/map")({
   component: MapPage,
@@ -23,10 +20,11 @@ export const Route = createFileRoute("/map")({
 
 function MapPage() {
   const fallback = (
-    <div className="h-full grid place-items-center bg-map-canvas text-white/60 text-sm">
-      Loading geospatial layer…
-    </div>
+    <Center height="100%" minHeight={480}>
+      <Spinner size="lg" label="Loading geospatial layer…" />
+    </Center>
   );
+
   return (
     <ClientOnly fallback={fallback}>
       <Suspense fallback={fallback}>

@@ -17,6 +17,9 @@
     "format:check": "prettier --check ."
   },
   "dependencies": {
+    "@astryxdesign/core": "^0.7.14",
+    "@astryxdesign/theme-neutral": "^0.7.14",
+    "@stylexjs/stylex": "^0.19.2",
     "@supabase/supabase-js": "^2.105.4",
     "@tanstack/react-query": "^5.83.0",
     "@tanstack/react-router": "^1.170.45",
@@ -36,6 +39,7 @@
     "zod": "^4.6.7"
   },
   "devDependencies": {
+    "@astryxdesign/cli": "^0.7.14",
     "@cloudflare/config": "^0.28.1",
     "@cloudflare/vite-plugin": "^2.0.0-beta.v.5",
     "@eslint/js": "^10.0.1",

@@ -1,190 +1,158 @@
-import { useEffect, useMemo, useRef, useState, useCallback, memo } from "react";
+import { memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
-  MapContainer,
-  TileLayer,
+  Circle,
   CircleMarker,
+  MapContainer,
   Marker,
   Popup,
-  Tooltip,
+  TileLayer,
   useMap,
 } from "react-leaflet";
 import L from "leaflet";
 import "leaflet.heat";
+import { useNavigate, useSearch } from "@tanstack/react-router";
+
+import { Layout, LayoutContent, LayoutFooter, LayoutHeader } from "@astryxdesign/core/Layout";
+import { SegmentedControl, SegmentedControlItem } from "@astryxdesign/core/SegmentedControl";
+import { ToggleButton, ToggleButtonGroup } from "@astryxdesign/core/ToggleButton";
+import { Selector } from "@astryxdesign/core/Selector";
+import { Drawer, DrawerHeader } from "@astryxdesign/core/Drawer";
+import { MetadataList, MetadataListItem } from "@astryxdesign/core/MetadataList";
+import { Token } from "@astryxdesign/core/Token";
+import { StatusDot } from "@astryxdesign/core/StatusDot";
+import { List, ListItem } from "@astryxdesign/core/List";
+import { Banner } from "@astryxdesign/core/Banner";
+import { EmptyState } from "@astryxdesign/core/EmptyState";
+import { Heading } from "@astryxdesign/core/Heading";
+import { Text } from "@astryxdesign/core/Text";
+import { Divider } from "@astryxdesign/core/Divider";
+import { HStack } from "@astryxdesign/core/HStack";
+import { VStack } from "@astryxdesign/core/VStack";
+import { Center } from "@astryxdesign/core/Center";
+import { Spinner } from "@astryxdesign/core/Spinner";
+
 import { useCases, useRodents } from "@/hooks/use-surveillance";
 import { useNow } from "@/hooks/use-now";
 import { REGIONS, type Case, type RodentSite } from "@/lib/mock-data";
-import { Layers, Calendar, X, MapPin, AlertTriangle, Rat, Activity, Loader2 } from "lucide-react";
-import { useNavigate, useSearch } from "@tanstack/react-router";
 import { DAY_MS } from "@/lib/time";
-import { cn } from "@/lib/utils";
-import { QueryError } from "@/components/QueryError";
 import { getMapTileConfig } from "@/lib/map-config";
 import { isPlottable } from "@/lib/geo";
+import { QueryError } from "@/components/QueryError";
 
 const mapTile = getMapTileConfig();
 
 type HeatLayerInstance = L.Layer & {
-  setLatLngs: (latlngs: [number, number, number][]) => HeatLayerInstance;
+  setLatLngs: (latlngs: [number, number, number][]) => void;
 };
 
 type LeafletWithHeat = typeof L & {
   heatLayer: (
     latlngs: [number, number, number][],
-    options?: {
-      radius?: number;
-      blur?: number;
-      maxZoom?: number;
-      minOpacity?: number;
-      gradient?: Record<number, string>;
-    },
+    options?: Record<string, unknown>,
   ) => HeatLayerInstance;
 };
+
+const RANGES: Array<{ days: 7 | 30 | 90; label: string }> = [
+  { days: 7, label: "7D" },
+  { days: 30, label: "30D" },
+  { days: 90, label: "90D" },
+];
+
+const rodentIcon = L.divIcon({
+  className: "",
+  iconSize: [20, 20],
+  iconAnchor: [10, 10],
+  html: `<svg width="20" height="20" viewBox="0 0 20 20" aria-hidden="true"><polygon points="10,2 18,16 2,16" fill="#0d9488" stroke="#f8fafc" stroke-width="1.5"/></svg>`,
+});
 
 function HeatLayer({ points }: { points: [number, number, number][] }) {
   const map = useMap();
   const layerRef = useRef<HeatLayerInstance | null>(null);
 
   useEffect(() => {
-    const layer = (L as LeafletWithHeat).heatLayer([], {
-      radius: 28,
-      blur: 22,
-      maxZoom: 9,
-      minOpacity: 0.25,
-      gradient: { 0.2: "#fbbf24", 0.5: "#f97316", 0.8: "#ef4444", 1.0: "#dc2626" },
-    });
-    layer.addTo(map);
-    layerRef.current = layer;
+    const Lheat = L as LeafletWithHeat;
+    if (!Lheat.heatLayer) return;
+    if (!layerRef.current) {
+      layerRef.current = Lheat.heatLayer(points, {
+        radius: 28,
+        blur: 20,
+        maxZoom: 11,
+        gradient: { 0.2: "#0d9488", 0.55: "#f59e0b", 0.9: "#dc2626" },
+      }).addTo(map);
+    } else {
+      layerRef.current.setLatLngs(points);
+    }
+  }, [map, points]);
+
+  useEffect(() => {
     return () => {
-      try {
-        map.removeLayer(layer);
-      } catch {
-        /* ignore */
+      if (layerRef.current) {
+        map.removeLayer(layerRef.current);
+        layerRef.current = null;
       }
-      layerRef.current = null;
     };
   }, [map]);
 
-  useEffect(() => {
-    if (layerRef.current) {
-      layerRef.current.setLatLngs(points);
-    }
-  }, [points]);
-
   return null;
 }
-
-const rodentIcon = L.divIcon({
-  className: "",
-  html: `<div style="width:0;height:0;border-left:8px solid transparent;border-right:8px solid transparent;border-bottom:14px solid var(--map-rodent);filter:drop-shadow(0 0 4px color-mix(in oklch, var(--map-rodent) 60%, transparent));"></div>`,
-  iconSize: [16, 14],
-  iconAnchor: [8, 14],
-});
 
 function MapController({
-  points,
-  range,
-  cases,
-  rodents,
-  onSelectCase,
+  targetCase,
+  targetSite,
+  targetRegion,
 }: {
-  points: [number, number][];
-  range: number;
-  cases: Case[];
-  rodents: RodentSite[];
-  onSelectCase: (c: Case) => void;
+  targetCase?: Case;
+  targetSite?: RodentSite;
+  targetRegion?: string;
 }) {
   const map = useMap();
-  const fittedRangeRef = useRef<number | null>(null);
-  // Focus targets arrive as URL search params (?case= / ?site= / ?region=),
-  // so deep links are shareable and survive refresh.
-  const search = useSearch({ strict: false }) as { case?: string; site?: string; region?: string };
-
-  // Refs so the focus effect below reads fresh data without re-running on
-  // every data change. Synced in an effect (writing refs during render is
-  // unsafe under concurrent rendering).
-  const casesRef = useRef(cases);
-  const rodentsRef = useRef(rodents);
-  const selectRef = useRef(onSelectCase);
-  useEffect(() => {
-    casesRef.current = cases;
-    rodentsRef.current = rodents;
-    selectRef.current = onSelectCase;
-  });
 
   useEffect(() => {
-    if (points.length > 0 && fittedRangeRef.current !== range) {
-      try {
-        map.fitBounds(L.latLngBounds(points), { padding: [40, 40] });
-        fittedRangeRef.current = range;
-      } catch {
-        /* ignore */
+    if (targetCase && isPlottable(targetCase)) {
+      map.flyTo([targetCase.lat, targetCase.lng], 8, { duration: 0.7 });
+      return;
+    }
+    if (targetSite && isPlottable(targetSite)) {
+      map.flyTo([targetSite.lat, targetSite.lng], 9, { duration: 0.7 });
+      return;
+    }
+    if (targetRegion) {
+      const found = REGIONS.find((r) => r.name === targetRegion);
+      if (found) {
+        map.flyTo([found.lat, found.lng], 6, { duration: 0.7 });
       }
     }
-  }, [map, points, range]);
-
-  const focusKey = `${search.case ?? ""}|${search.site ?? ""}|${search.region ?? ""}`;
-  const hasFocus = focusKey.replace(/\|/g, "").length > 0;
-  useEffect(() => {
-    if (!hasFocus) return;
-    try {
-      if (search.case) {
-        const found = casesRef.current.find((c) => c.id === search.case);
-        if (found && isPlottable(found)) {
-          map.flyTo([found.lat, found.lng], 8, { duration: 0.8 });
-          selectRef.current(found);
-        }
-      } else if (search.site) {
-        const site = rodentsRef.current.find((r) => r.id === search.site);
-        if (site) map.flyTo([site.lat, site.lng], 8, { duration: 0.8 });
-      } else if (search.region) {
-        const region = REGIONS.find((r) => r.name === search.region);
-        if (region) map.flyTo([region.lat, region.lng], 6, { duration: 0.8 });
-      }
-      // Focus should win over the initial fitBounds once a target exists.
-      fittedRangeRef.current = range;
-    } catch {
-      /* ignore */
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [focusKey, map, range]);
+  }, [map, targetCase, targetSite, targetRegion]);
 
   return null;
 }
 
-const RANGES = [
-  { label: "7D", days: 7 },
-  { label: "30D", days: 30 },
-  { label: "90D", days: 90 },
-];
+type PlottedCase = Case & { lat: number; lng: number };
 
-// Memoized per-marker components: a realtime INSERT produces a new array but
-// reuses the existing item objects, so only the new marker renders.
 const CaseDot = memo(function CaseDot({
   c,
-  pulse,
+  isSelected,
   onSelect,
 }: {
-  c: Case & { lat: number; lng: number };
-  pulse: boolean;
+  c: PlottedCase;
+  isSelected: boolean;
   onSelect: (c: Case) => void;
 }) {
+  const fillColor =
+    c.status === "Confirmed" ? "#dc2626" : c.status === "Suspected" ? "#d97706" : "#2563eb";
+
   return (
     <CircleMarker
       center={[c.lat, c.lng]}
-      radius={6}
+      radius={isSelected ? 8 : 6}
       pathOptions={{
-        color: "oklch(0.98 0 0)",
-        weight: 1.5,
-        fillColor: c.status === "Confirmed" ? "oklch(0.58 0.24 25)" : "oklch(0.7 0.18 50)",
-        fillOpacity: 0.85,
-        className: pulse ? "pulse-marker" : undefined,
+        color: isSelected ? "#ffffff" : "#f8fafc",
+        weight: isSelected ? 2.5 : 1.5,
+        fillColor,
+        fillOpacity: 0.9,
       }}
       eventHandlers={{ click: () => onSelect(c) }}
-    >
-      <Tooltip>
-        {c.id} · {c.region}
-      </Tooltip>
-    </CircleMarker>
+    />
   );
 });
 
@@ -192,358 +160,21 @@ const RodentPin = memo(function RodentPin({ r }: { r: RodentSite }) {
   return (
     <Marker position={[r.lat, r.lng]} icon={rodentIcon}>
       <Popup>
-        <div className="text-[12px]">
-          <div className="font-semibold">{r.id}</div>
-          <div>{r.species}</div>
-          <div className="text-warning">Positivity: {r.positivity}%</div>
-        </div>
+        <VStack gap={1}>
+          <Text type="label" weight="semibold">
+            {r.id} · {r.region}
+          </Text>
+          <Text type="supporting">
+            {r.species} · {(r.positivity * 100).toFixed(0)}% seropositive
+          </Text>
+          <Text type="supporting">Sampled {r.date}</Text>
+        </VStack>
       </Popup>
     </Marker>
   );
 });
 
-export default function MapView() {
-  const [layers, setLayers] = useState({ cases: true, rodents: true, density: true });
-  const [range, setRange] = useState(30);
-  const [selected, setSelected] = useState<Case | null>(null);
-  const {
-    data: CASES,
-    loading: casesLoading,
-    error: casesError,
-    refetch: refetchCases,
-  } = useCases();
-  const {
-    data: RODENTS,
-    loading: rodentsLoading,
-    error: rodentsError,
-    refetch: refetchRodents,
-  } = useRodents();
-  const now = useNow();
-  const navigate = useNavigate({ from: "/map" });
-  const loadError = casesError ?? rodentsError ?? null;
-  const loading = casesLoading || rodentsLoading;
-
-  const visibleCases = useMemo(() => {
-    return CASES.filter(
-      (c): c is Case & { lat: number; lng: number } =>
-        isPlottable(c) && now - +new Date(c.date) <= range * DAY_MS,
-    );
-  }, [range, CASES, now]);
-
-  const visibleRodents = useMemo(() => {
-    return RODENTS.filter((r) => isPlottable(r) && now - +new Date(r.date) <= range * DAY_MS);
-  }, [range, RODENTS, now]);
-
-  const points: [number, number][] = useMemo(
-    () => [...visibleCases, ...visibleRodents].map((p) => [p.lat, p.lng] as [number, number]),
-    [visibleCases, visibleRodents],
-  );
-
-  const heatPoints: [number, number, number][] = useMemo(
-    () =>
-      visibleCases.map(
-        (c) => [c.lat, c.lng, c.status === "Confirmed" ? 1 : 0.6] as [number, number, number],
-      ),
-    [visibleCases],
-  );
-
-  const proxRodents = useMemo(() => {
-    if (!selected) return [];
-    return RODENTS.filter((r) => {
-      if (!isPlottable(selected)) return false;
-      const d = haversine(selected.lat, selected.lng, r.lat, r.lng);
-      return d < 5 && r.positivity > 30;
-    });
-  }, [selected, RODENTS]);
-
-  // Escape closes the case detail drawer.
-  const closeDrawer = useCallback(() => {
-    setSelected(null);
-    // Drop the ?case= focus param so the URL matches the closed drawer.
-    navigate({ search: {} });
-  }, [navigate]);
-
-  useEffect(() => {
-    if (!selected) return;
-    const onKey = (e: KeyboardEvent) => {
-      if (e.key === "Escape") closeDrawer();
-    };
-    window.addEventListener("keydown", onKey);
-    return () => window.removeEventListener("keydown", onKey);
-  }, [selected, closeDrawer]);
-
-  return (
-    <div className="relative h-full w-full bg-map-canvas">
-      {loadError ? (
-        <div className="absolute inset-0 z-[600] grid place-items-center bg-map-canvas p-6">
-          <div className="w-full max-w-md">
-            <QueryError
-              what="surveillance map data"
-              error={loadError}
-              onRetry={() => {
-                void refetchCases();
-                void refetchRodents();
-              }}
-            />
-          </div>
-        </div>
-      ) : loading ? (
-        <div
-          className="absolute inset-0 z-[600] grid place-items-center bg-map-canvas"
-          role="status"
-        >
-          <span className="sr-only">Loading map data…</span>
-          <Loader2 className="size-6 animate-spin text-white/70" />
-        </div>
-      ) : (
-        <>
-          <MapContainer
-            center={[-34, -64]}
-            zoom={4}
-            className="h-full w-full z-0"
-            style={{ background: "var(--map-canvas)" }}
-          >
-            <TileLayer
-              attribution={mapTile.attribution}
-              url={mapTile.url}
-              maxNativeZoom={mapTile.maxNativeZoom}
-            />
-            <MapController
-              points={points}
-              range={range}
-              cases={CASES.filter(isPlottable)}
-              rodents={RODENTS.filter(isPlottable)}
-              onSelectCase={setSelected}
-            />
-            {layers.density && heatPoints.length > 0 && <HeatLayer points={heatPoints} />}
-            {layers.cases &&
-              visibleCases.map((c, i) => (
-                <CaseDot key={c.id} c={c} pulse={i < 25} onSelect={setSelected} />
-              ))}
-            {layers.rodents && visibleRodents.map((r) => <RodentPin key={r.id} r={r} />)}
-          </MapContainer>
-
-          {/* Layer switcher */}
-          <div className="absolute top-4 right-4 z-[400] bg-map-panel/95 backdrop-blur border border-white/10 rounded-lg p-3 shadow-xl text-white w-52 sm:w-56">
-            <div className="flex items-center gap-2 text-[11px] uppercase tracking-wider text-white/60 mb-2.5">
-              <Layers className="size-3.5" /> Data Layers
-            </div>
-            {(
-              [
-                { k: "cases", label: "Human Cases", color: "bg-alert", icon: AlertTriangle },
-                { k: "rodents", label: "Rodent Vectors", color: "bg-map-rodent", icon: Rat },
-                { k: "density", label: "Risk Density", color: "bg-warning", icon: Activity },
-              ] as const
-            ).map((l) => {
-              const Icon = l.icon;
-              return (
-                <label
-                  key={l.k}
-                  className="flex items-center gap-2.5 py-1.5 cursor-pointer hover:bg-white/5 px-1.5 rounded"
-                >
-                  <input
-                    type="checkbox"
-                    checked={layers[l.k]}
-                    onChange={(e) => setLayers((s) => ({ ...s, [l.k]: e.target.checked }))}
-                    className="accent-teal size-3.5"
-                  />
-                  <span className={cn("size-2 rounded-full", l.color)} />
-                  <Icon className="size-3.5 text-white/60" />
-                  <span className="text-[12px] flex-1">{l.label}</span>
-                </label>
-              );
-            })}
-          </div>
-
-          {/* Time slider */}
-          <div className="absolute bottom-4 sm:bottom-6 left-1/2 -translate-x-1/2 z-[400] max-w-[calc(100vw-2rem)] bg-map-panel/95 backdrop-blur border border-white/10 rounded-lg px-3 sm:px-4 py-2.5 sm:py-3 shadow-xl text-white flex flex-wrap items-center justify-center gap-2 sm:gap-3">
-            <div className="flex items-center gap-1.5">
-              <Calendar className="size-4 text-teal" />
-              <span className="text-[11px] uppercase tracking-wider text-white/60 hidden sm:inline">
-                Time window
-              </span>
-            </div>
-            <div className="flex gap-1">
-              {RANGES.map((r) => (
-                <button
-                  key={r.days}
-                  type="button"
-                  aria-pressed={range === r.days}
-                  onClick={() => setRange(r.days)}
-                  className={cn(
-                    "px-2.5 sm:px-3 py-1 rounded text-[12px] font-semibold transition-colors",
-                    range === r.days ? "bg-teal text-white" : "text-white/60 hover:bg-white/5",
-                  )}
-                >
-                  Last {r.label}
-                </button>
-              ))}
-            </div>
-            <div className="text-[11px] text-white/60 sm:border-l sm:border-white/10 sm:pl-3">
-              {visibleCases.length} cases · {visibleRodents.length} sites
-            </div>
-          </div>
-
-          {/* Heat density legend */}
-          <div
-            className="absolute bottom-4 right-4 z-[400] bg-map-panel/95 backdrop-blur border border-white/10 rounded-lg px-3 py-2.5 shadow-xl text-white"
-            aria-hidden="true"
-          >
-            <div className="text-[10px] uppercase tracking-wider text-white/60 mb-1.5">
-              Case density
-            </div>
-            <div className="h-2 w-32 rounded-full bg-gradient-to-r from-[#fbbf24] via-[#f97316] to-[#dc2626]" />
-            <div className="flex justify-between text-[10px] text-white/60 mt-1">
-              <span>Low</span>
-              <span>High</span>
-            </div>
-          </div>
-
-          {/* Empty state: data loaded but nothing in range */}
-          {visibleCases.length === 0 && visibleRodents.length === 0 && (
-            <div className="absolute top-4 left-1/2 -translate-x-1/2 z-[400] bg-map-panel/95 backdrop-blur border border-white/10 rounded-lg px-4 py-2.5 text-white/80 text-[12px] flex items-center gap-2 shadow-xl">
-              <AlertTriangle className="size-3.5 text-warning" />
-              No surveillance data within the last {range} days.
-            </div>
-          )}
-
-          {/* Detail drawer */}
-          {selected && (
-            <div className="absolute top-0 right-0 bottom-0 w-full sm:w-[380px] z-[500] bg-card border-l border-border shadow-2xl overflow-y-auto animate-in slide-in-from-right duration-200">
-              <div className="p-5 border-b border-border flex items-start justify-between bg-primary text-primary-foreground">
-                <div>
-                  <div className="text-[11px] uppercase tracking-wider opacity-70">Case Detail</div>
-                  <div className="text-lg font-bold mt-0.5">{selected.id}</div>
-                  <div className="text-[12px] opacity-80 mt-1 flex items-center gap-1.5">
-                    <MapPin className="size-3" /> {selected.region}
-                  </div>
-                </div>
-                <button
-                  type="button"
-                  onClick={closeDrawer}
-                  aria-label="Close case details"
-                  className="p-1.5 rounded hover:bg-white/10"
-                >
-                  <X className="size-4" />
-                </button>
-              </div>
-
-              <div className="p-5 space-y-4">
-                <div className="grid grid-cols-2 gap-3 text-[12px]">
-                  <Field
-                    label="Status"
-                    value={selected.status}
-                    accent={selected.status === "Confirmed" ? "alert" : "warning"}
-                  />
-                  <Field label="Syndrome" value={selected.syndrome} />
-                  <Field label="Age" value={selected.age != null ? `${selected.age}y` : "—"} />
-                  <Field label="Sex" value={selected.sex ?? "Unknown"} />
-                  <Field label="Reported" value={new Date(selected.date).toLocaleDateString()} />
-                  <Field
-                    label="Coords"
-                    value={
-                      isPlottable(selected)
-                        ? `${selected.lat.toFixed(2)}, ${selected.lng.toFixed(2)}`
-                        : "Aggregate — no map location"
-                    }
-                  />
-                </div>
-
-                {(selected.symptoms.length > 0 || selected.exposure) && (
-                  <div className="rounded-md border border-border p-3">
-                    <div className="text-[10px] uppercase tracking-wider text-muted-foreground mb-2">
-                      Clinical Notes
-                    </div>
-                    {selected.symptoms.length > 0 && (
-                      <div className="flex flex-wrap gap-1.5">
-                        {selected.symptoms.map((s) => (
-                          <span
-                            key={s}
-                            className="text-[11px] font-medium px-2 py-0.5 rounded-full bg-muted text-muted-foreground"
-                          >
-                            {s}
-                          </span>
-                        ))}
-                      </div>
-                    )}
-                    {selected.exposure && (
-                      <p className="text-[11.5px] text-muted-foreground mt-2 leading-snug">
-                        {selected.exposure}
-                      </p>
-                    )}
-                  </div>
-                )}
-
-                {proxRodents.length > 0 ? (
-                  <div className="rounded-md border border-alert/30 bg-alert/10 p-3">
-                    <div className="flex items-center gap-1.5 text-alert font-semibold text-[12px] mb-1.5">
-                      <AlertTriangle className="size-3.5" /> Proximity Alert
-                    </div>
-                    <div className="text-[11.5px] text-foreground">
-                      {proxRodents.length} positive rodent site{proxRodents.length > 1 ? "s" : ""}{" "}
-                      within 5km radius.
-                    </div>
-                    <ul className="mt-2 space-y-1 text-[11px] text-muted-foreground">
-                      {proxRodents.slice(0, 3).map((r) => (
-                        <li key={r.id} className="flex justify-between">
-                          <span>
-                            {r.id} · {r.species}
-                          </span>
-                          <span className="text-alert font-semibold">{r.positivity}%</span>
-                        </li>
-                      ))}
-                    </ul>
-                  </div>
-                ) : (
-                  <div className="rounded-md border border-success/30 bg-success/10 p-3 text-[12px] text-success">
-                    No high-positivity rodent sites within 5km radius.
-                  </div>
-                )}
-              </div>
-            </div>
-          )}
-        </>
-      )}
-
-      <style>{`
-        .pulse-marker { animation: pulseMarker 1.8s ease-out infinite; }
-        @keyframes pulseMarker {
-          0%, 100% { fill-opacity: 0.85; }
-          50% { fill-opacity: 0.4; }
-        }
-        .leaflet-container { font-family: 'Inter', sans-serif; background: var(--map-canvas); }
-        .leaflet-popup-content-wrapper, .leaflet-popup-tip { background: var(--map-panel); color: #fff; border: 1px solid rgba(255,255,255,0.1); }
-      `}</style>
-    </div>
-  );
-}
-
-function Field({
-  label,
-  value,
-  accent,
-}: {
-  label: string;
-  value: string;
-  accent?: "alert" | "warning";
-}) {
-  return (
-    <div>
-      <div className="text-[10px] uppercase tracking-wider text-muted-foreground">{label}</div>
-      <div
-        className={cn(
-          "font-semibold mt-0.5",
-          accent === "alert" && "text-alert",
-          accent === "warning" && "text-warning",
-        )}
-      >
-        {value}
-      </div>
-    </div>
-  );
-}
-
-function haversine(lat1: number, lon1: number, lat2: number, lon2: number) {
+function haversineKm(lat1: number, lon1: number, lat2: number, lon2: number) {
   const R = 6371;
   const toRad = (d: number) => (d * Math.PI) / 180;
   const dLat = toRad(lat2 - lat1);
@@ -551,5 +182,393 @@ function haversine(lat1: number, lon1: number, lat2: number, lon2: number) {
   const a =
     Math.sin(dLat / 2) ** 2 +
     Math.cos(toRad(lat1)) * Math.cos(toRad(lat2)) * Math.sin(dLon / 2) ** 2;
-  return 2 * R * Math.asin(Math.sqrt(a));
+  return 2 * R * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+}
+
+export function MapView() {
+  const search = useSearch({ from: "/map" });
+  const navigate = useNavigate();
+  const now = useNow();
+
+  const {
+    data: cases = [],
+    loading: casesLoading,
+    error: casesError,
+    refetch: refetchCases,
+  } = useCases();
+  const {
+    data: rodents = [],
+    loading: rodentsLoading,
+    error: rodentsError,
+    refetch: refetchRodents,
+  } = useRodents();
+
+  const [days, setDays] = useState<7 | 30 | 90>(90);
+  const selectedRegion = search.region ?? "all";
+  const [activeLayers, setActiveLayers] = useState<string[]>(["cases", "rodents", "heat"]);
+  const [lastViewedCase, setLastViewedCase] = useState<Case | null>(null);
+
+  const urlCase = useMemo(
+    () => (search.case ? (cases.find((c) => c.id === search.case) ?? null) : null),
+    [search.case, cases],
+  );
+  const drawerOpen = Boolean(urlCase);
+  const selectedCase = urlCase ?? lastViewedCase;
+
+  const targetCase = useMemo(
+    () => (search.case ? cases.find((c) => c.id === search.case) : undefined),
+    [cases, search.case],
+  );
+  const targetSite = useMemo(
+    () => (search.site ? rodents.find((r) => r.id === search.site) : undefined),
+    [rodents, search.site],
+  );
+
+  const cutoff = now - days * DAY_MS;
+
+  const visibleCases = useMemo(() => {
+    return cases.filter((c): c is PlottedCase => {
+      if (!isPlottable(c)) return false;
+      if (+new Date(c.date) < cutoff) return false;
+      if (selectedRegion !== "all" && c.region !== selectedRegion) return false;
+      return true;
+    });
+  }, [cases, cutoff, selectedRegion]);
+
+  const visibleRodents = useMemo(() => {
+    return rodents.filter((r) => {
+      if (!isPlottable(r)) return false;
+      if (selectedRegion !== "all" && r.region !== selectedRegion) return false;
+      return true;
+    });
+  }, [rodents, selectedRegion]);
+
+  const heatPoints = useMemo<[number, number, number][]>(() => {
+    const casePts: [number, number, number][] = visibleCases.map((c) => [
+      c.lat,
+      c.lng,
+      c.status === "Confirmed" ? 0.95 : 0.65,
+    ]);
+    const rodentPts: [number, number, number][] = visibleRodents.map((r) => [
+      r.lat,
+      r.lng,
+      Math.max(0.35, r.positivity),
+    ]);
+    return [...casePts, ...rodentPts];
+  }, [visibleCases, visibleRodents]);
+
+  const handleSelectCase = useCallback(
+    (c: Case) => {
+      setLastViewedCase(c);
+      void navigate({
+        to: "/map",
+        search: { case: c.id, region: selectedRegion !== "all" ? selectedRegion : undefined },
+        replace: true,
+      });
+    },
+    [navigate, selectedRegion],
+  );
+
+  const handleDrawerOpenChange = useCallback(
+    (open: boolean) => {
+      if (!open && urlCase) {
+        setLastViewedCase(urlCase);
+        void navigate({
+          to: "/map",
+          search: selectedRegion !== "all" ? { region: selectedRegion } : {},
+          replace: true,
+        });
+      }
+    },
+    [navigate, urlCase, selectedRegion],
+  );
+
+  const handleRegionChange = useCallback(
+    (region: string) => {
+      void navigate({
+        to: "/map",
+        search: region === "all" ? {} : { region },
+        replace: true,
+      });
+    },
+    [navigate],
+  );
+
+  const nearbyRodents = useMemo(() => {
+    if (!selectedCase || !isPlottable(selectedCase)) return [];
+    const lat = selectedCase.lat;
+    const lng = selectedCase.lng;
+    return rodents
+      .filter(isPlottable)
+      .map((site) => ({
+        site,
+        distanceKm: haversineKm(lat, lng, site.lat, site.lng),
+      }))
+      .filter((entry) => entry.distanceKm <= 5)
+      .sort((a, b) => a.distanceKm - b.distanceKm);
+  }, [selectedCase, rodents]);
+
+  const showCases = activeLayers.includes("cases");
+  const showRodents = activeLayers.includes("rodents");
+  const showHeat = activeLayers.includes("heat");
+
+  const queryError = casesError || rodentsError;
+  const loading = casesLoading || rodentsLoading;
+
+  const regionOptions = [
+    { value: "all", label: "All regions" },
+    ...REGIONS.map((r) => ({ value: r.name, label: r.name })),
+  ];
+
+  const statusTokenColor =
+    selectedCase?.status === "Confirmed"
+      ? "red"
+      : selectedCase?.status === "Suspected"
+        ? "orange"
+        : "blue";
+
+  return (
+    <Layout height="fill" padding={0}>
+      <LayoutHeader hasDivider>
+        <HStack
+          justify="between"
+          align="center"
+          gap={3}
+          wrap="wrap"
+          paddingInline={4}
+          paddingBlock={2}
+        >
+          <HStack gap={3} align="center" wrap="wrap">
+            <Heading level={1}>Geospatial Tracker</Heading>
+            <SegmentedControl
+              label="Date window"
+              size="sm"
+              value={String(days)}
+              onChange={(v) => setDays(Number(v) as 7 | 30 | 90)}
+            >
+              {RANGES.map((r) => (
+                <SegmentedControlItem key={r.days} value={String(r.days)} label={r.label} />
+              ))}
+            </SegmentedControl>
+
+            <Selector
+              label="Focus region"
+              isLabelHidden
+              variant="secondary"
+              size="sm"
+              width={168}
+              options={regionOptions}
+              value={selectedRegion}
+              onChange={handleRegionChange}
+            />
+          </HStack>
+
+          <ToggleButtonGroup
+            type="multiple"
+            label="Map data layers"
+            size="sm"
+            value={activeLayers}
+            onChange={(vals) => setActiveLayers((vals as string[]) ?? [])}
+          >
+            <ToggleButton value="cases" label="Human cases">
+              Cases
+            </ToggleButton>
+            <ToggleButton value="rodents" label="Rodent traps">
+              Traps
+            </ToggleButton>
+            <ToggleButton value="heat" label="Density heat">
+              Heat
+            </ToggleButton>
+          </ToggleButtonGroup>
+        </HStack>
+      </LayoutHeader>
+
+      <LayoutContent padding={0} isScrollable={false}>
+        <VStack width="100%" height="100%" minHeight={480}>
+          {queryError && (
+            <VStack padding={3}>
+              <QueryError
+                what="geospatial telemetry"
+                error={queryError}
+                onRetry={() => {
+                  void refetchCases();
+                  void refetchRodents();
+                }}
+              />
+            </VStack>
+          )}
+
+          {loading ? (
+            <Center height="100%" minHeight={480}>
+              <Spinner size="lg" label="Loading case & reservoir coordinates…" />
+            </Center>
+          ) : (
+            <MapContainer center={[-34, -64]} zoom={4} className="h-full w-full z-0 bg-map-canvas">
+              <TileLayer
+                attribution={mapTile.attribution}
+                url={mapTile.url}
+                maxNativeZoom={mapTile.maxNativeZoom}
+              />
+
+              <MapController
+                targetCase={targetCase}
+                targetSite={targetSite}
+                targetRegion={selectedRegion !== "all" ? selectedRegion : undefined}
+              />
+
+              {showHeat && <HeatLayer points={heatPoints} />}
+
+              {showCases &&
+                visibleCases.map((c) => (
+                  <CaseDot
+                    key={c.id}
+                    c={c}
+                    isSelected={selectedCase?.id === c.id && drawerOpen}
+                    onSelect={handleSelectCase}
+                  />
+                ))}
+
+              {showCases && selectedCase && isPlottable(selectedCase) && drawerOpen && (
+                <Circle
+                  center={[selectedCase.lat, selectedCase.lng]}
+                  radius={5000}
+                  pathOptions={{
+                    color: "#0d9488",
+                    weight: 1.5,
+                    dashArray: "4 4",
+                    fillColor: "#0d9488",
+                    fillOpacity: 0.08,
+                  }}
+                />
+              )}
+
+              {showRodents && visibleRodents.map((r) => <RodentPin key={r.id} r={r} />)}
+            </MapContainer>
+          )}
+        </VStack>
+      </LayoutContent>
+
+      <LayoutFooter hasDivider>
+        <HStack
+          justify="between"
+          align="center"
+          gap={4}
+          wrap="wrap"
+          paddingInline={4}
+          paddingBlock={2}
+        >
+          <HStack gap={4} align="center" wrap="wrap">
+            <HStack gap={1.5} align="center">
+              <StatusDot variant="error" label="Confirmed case" />
+              <Text type="supporting">Confirmed</Text>
+            </HStack>
+            <HStack gap={1.5} align="center">
+              <StatusDot variant="warning" label="Suspected case" />
+              <Text type="supporting">Suspected</Text>
+            </HStack>
+            <HStack gap={1.5} align="center">
+              <StatusDot variant="accent" label="Pending lab" />
+              <Text type="supporting">Pending</Text>
+            </HStack>
+            <HStack gap={1.5} align="center">
+              <StatusDot variant="success" label="Rodent trap site" />
+              <Text type="supporting">Rodent trap</Text>
+            </HStack>
+          </HStack>
+
+          <Text type="supporting" hasTabularNumbers>
+            {visibleCases.length} plotted cases · {visibleRodents.length} trap sites · 5 km
+            proximity check
+          </Text>
+        </HStack>
+      </LayoutFooter>
+
+      <Drawer
+        isOpen={drawerOpen && Boolean(selectedCase)}
+        onOpenChange={handleDrawerOpenChange}
+        label="Case epidemiological details"
+        side="end"
+        width={400}
+        hasScrim={false}
+        padding={4}
+      >
+        {selectedCase && (
+          <VStack gap={4}>
+            <DrawerHeader
+              title={selectedCase.id}
+              subtitle={`${selectedCase.region} · Onset ${selectedCase.date}`}
+              onOpenChange={handleDrawerOpenChange}
+              hasDivider
+            />
+
+            <HStack gap={2} align="center" wrap="wrap">
+              <Token color={statusTokenColor} label={selectedCase.status} />
+              <Token color="blue" label={selectedCase.syndrome} />
+            </HStack>
+
+            <MetadataList columns={2} title="Patient & exposure">
+              <MetadataListItem label="Syndrome">{selectedCase.syndrome}</MetadataListItem>
+              <MetadataListItem label="Onset date">{selectedCase.date}</MetadataListItem>
+              <MetadataListItem label="Age / Sex">
+                {selectedCase.age != null ? `${selectedCase.age}y` : "Unknown"} ·{" "}
+                {selectedCase.sex ?? "—"}
+              </MetadataListItem>
+              <MetadataListItem label="Exposure">
+                {selectedCase.exposure ?? "Not recorded"}
+              </MetadataListItem>
+            </MetadataList>
+
+            <VStack gap={2}>
+              <Heading level={3}>Clinical symptoms</Heading>
+              {selectedCase.symptoms.length > 0 ? (
+                <HStack gap={1.5} wrap="wrap">
+                  {selectedCase.symptoms.map((sym) => (
+                    <Token key={sym} size="sm" label={sym} />
+                  ))}
+                </HStack>
+              ) : (
+                <Text type="supporting">No symptoms recorded.</Text>
+              )}
+            </VStack>
+
+            <Divider />
+
+            <VStack gap={3}>
+              <Heading level={3}>Reservoir proximity (&le; 5 km)</Heading>
+              {nearbyRodents.length > 0 ? (
+                <VStack gap={2}>
+                  <Banner
+                    status="warning"
+                    title={`${nearbyRodents.length} seropositive trap site(s) within 5 km`}
+                    description="Coordinates intersect active Sigmodontinae sampling radius."
+                  />
+                  <List edge="outset" density="compact">
+                    {nearbyRodents.map(({ site, distanceKm }) => (
+                      <ListItem
+                        key={site.id}
+                        label={site.id}
+                        description={`${site.species} · ${distanceKm.toFixed(1)} km away`}
+                        endContent={
+                          <Text type="supporting" weight="semibold" hasTabularNumbers>
+                            {(site.positivity * 100).toFixed(0)}%
+                          </Text>
+                        }
+                        href={`/map?site=${encodeURIComponent(site.id)}`}
+                      />
+                    ))}
+                  </List>
+                </VStack>
+              ) : (
+                <EmptyState
+                  isCompact
+                  title="No traps within 5 km"
+                  description="No recorded rodent sampling stations fall inside a 5 km radius of this case."
+                />
+              )}
+            </VStack>
+          </VStack>
+        )}
+      </Drawer>
+    </Layout>
+  );
 }

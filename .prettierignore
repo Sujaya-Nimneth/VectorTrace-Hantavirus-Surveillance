@@ -6,3 +6,6 @@ pnpm-lock.yaml
 package-lock.json
 bun.lock
 routeTree.gen.ts
+src/astryx-themes.ts
+AGENTS.md
+GEMINI.md
