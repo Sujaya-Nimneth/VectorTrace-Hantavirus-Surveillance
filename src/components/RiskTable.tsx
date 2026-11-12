@@ -1,28 +1,39 @@
 import { useMemo, useState } from "react";
+import { Toolbar } from "@astryxdesign/core/Toolbar";
+import { SegmentedControl, SegmentedControlItem } from "@astryxdesign/core/SegmentedControl";
+import { Selector } from "@astryxdesign/core/Selector";
+import { Button } from "@astryxdesign/core/Button";
+import { Icon } from "@astryxdesign/core/Icon";
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHeader,
+  TableHeaderCell,
+  TableRow,
+} from "@astryxdesign/core/Table";
+import { ProgressBar } from "@astryxdesign/core/ProgressBar";
+import { Token } from "@astryxdesign/core/Token";
+import { Link } from "@astryxdesign/core/Link";
+import { Text } from "@astryxdesign/core/Text";
+import { HStack } from "@astryxdesign/core/HStack";
+import { VStack } from "@astryxdesign/core/VStack";
+import { Skeleton } from "@astryxdesign/core/Skeleton";
+import { ArrowDown, ArrowUp, ArrowUpDown, Download } from "lucide-react";
+
 import { useCases } from "@/hooks/use-surveillance";
 import { useNow } from "@/hooks/use-now";
 import { REGIONS } from "@/lib/mock-data";
-import { TrendingUp, ArrowUpDown, ArrowUp, ArrowDown, Download } from "lucide-react";
-import { cn } from "@/lib/utils";
 import { buildCsv, downloadCsv } from "@/lib/csv";
 import { DAY_MS } from "@/lib/time";
 import { QueryError } from "./QueryError";
-import { Skeleton } from "./Skeleton";
-
-const WINDOWS = [
-  { label: "7D", days: 7 },
-  { label: "30D", days: 30 },
-  { label: "90D", days: 90 },
-] as const;
 
 type SortKey = "region" | "pop" | "total" | "confirmed" | "rate";
 
-const COLUMNS: { key: SortKey; label: string; align: "left" | "right"; bar?: boolean }[] = [
-  { key: "region", label: "Region", align: "left" },
-  { key: "pop", label: "Population", align: "right" },
-  { key: "total", label: "Cases", align: "right" },
-  { key: "confirmed", label: "Confirmed", align: "right" },
-  { key: "rate", label: "Rate / 100k", align: "left", bar: true },
+const WINDOWS = [
+  { days: "30", label: "30D" },
+  { days: "90", label: "90D" },
+  { days: "365", label: "1Y" },
 ];
 
 export function RiskTable() {
@@ -40,185 +51,233 @@ export function RiskTable() {
     return regions
       .map((r) => {
         const cases = CASES.filter((c) => c.region === r.name && +new Date(c.date) >= cutoff);
-        const conf = cases.filter((c) => c.status === "Confirmed").length;
-        const rate = (cases.length / r.pop) * 100000;
-        return {
-          region: r.name,
-          total: cases.length,
-          confirmed: conf,
-          rate: +rate.toFixed(2),
-          pop: r.pop,
-        };
+        const total = cases.length;
+        const confirmed = cases.filter((c) => c.status === "Confirmed").length;
+        const rate = r.pop > 0 ? (total / r.pop) * 100_000 : 0;
+        const tier = rate >= 2 ? "High" : rate >= 1 ? "Moderate" : "Low";
+        return { region: r.name, pop: r.pop, total, confirmed, rate, tier };
       })
       .sort((a, b) => {
-        const dir = sortDir === "asc" ? 1 : -1;
-        if (sortKey === "region") return a.region.localeCompare(b.region) * dir;
-        return (a[sortKey] - b[sortKey]) * dir;
+        const av = a[sortKey];
+        const bv = b[sortKey];
+        if (typeof av === "string" && typeof bv === "string") {
+          return sortDir === "asc" ? av.localeCompare(bv) : bv.localeCompare(av);
+        }
+        return sortDir === "asc" ? Number(av) - Number(bv) : Number(bv) - Number(av);
       });
   }, [CASES, now, windowDays, regionFilter, sortKey, sortDir]);
 
+  const maxRate = useMemo(() => Math.max(...rows.map((r) => r.rate), 1), [rows]);
+
   const toggleSort = (key: SortKey) => {
-    if (key === sortKey) {
+    if (sortKey === key) {
       setSortDir((d) => (d === "asc" ? "desc" : "asc"));
     } else {
       setSortKey(key);
-      setSortDir(key === "region" ? "asc" : "desc");
+      setSortDir("desc");
     }
   };
 
   const exportCsv = () => {
     const csv = buildCsv(
-      ["region", "cases", "confirmed", "rate_per_100k", "population", `window_days:${windowDays}`],
-      rows.map((r) => [r.region, r.total, r.confirmed, r.rate, r.pop]),
+      ["Region", "Population", "Total Cases", "Confirmed", "Incidence / 100k", "Risk Tier"],
+      rows.map((r) => [r.region, r.pop, r.total, r.confirmed, r.rate.toFixed(2), r.tier]),
     );
-    downloadCsv(
-      `vectortrace-risk-${windowDays}d-${new Date().toISOString().slice(0, 10)}.csv`,
-      csv,
-    );
+    downloadCsv(`vectortrace-regional-risk-${windowDays}d.csv`, csv);
   };
 
   if (error) {
     return <QueryError what="risk ranking" error={error} onRetry={() => refetch()} />;
   }
 
-  if (loading) {
-    return (
-      <div
-        className="overflow-x-auto rounded-md border border-border"
-        role="status"
-        aria-label="Loading risk table"
-      >
-        <span className="sr-only">Loading risk table…</span>
-        <div className="w-full min-w-[560px] space-y-0 p-0">
-          {[0, 1, 2, 3, 4, 5].map((i) => (
-            <div key={i} className="border-t border-border first:border-t-0 px-4 py-3">
-              <Skeleton className="h-4 w-full" />
-            </div>
-          ))}
-        </div>
-      </div>
+  const sortIcon = (key: SortKey) => {
+    if (sortKey !== key) return <Icon icon={ArrowUpDown} size="xsm" color="secondary" />;
+    return sortDir === "asc" ? (
+      <Icon icon={ArrowUp} size="xsm" color="primary" />
+    ) : (
+      <Icon icon={ArrowDown} size="xsm" color="primary" />
     );
-  }
+  };
 
-  const max = Math.max(...rows.map((r) => r.rate), 1);
-  const rankByRate = new Map(
-    [...rows].sort((a, b) => b.rate - a.rate).map((r, i) => [r.region, i]),
-  );
+  const regionOptions = [
+    { value: "all", label: "All regions" },
+    ...REGIONS.map((r) => ({ value: r.name, label: r.name })),
+  ];
 
   return (
-    <div>
-      <div className="flex flex-wrap items-center gap-2 mb-3">
-        <div className="flex gap-1" role="group" aria-label="Time window">
-          {WINDOWS.map((w) => (
-            <button
-              key={w.days}
-              type="button"
-              aria-pressed={windowDays === w.days}
-              onClick={() => setWindowDays(w.days)}
-              className={cn(
-                "px-2.5 py-1 rounded text-[12px] font-semibold transition-colors",
-                windowDays === w.days
-                  ? "bg-primary text-primary-foreground"
-                  : "text-muted-foreground hover:bg-muted",
-              )}
-            >
-              {w.label}
-            </button>
-          ))}
-        </div>
-        <label className="flex items-center gap-1.5 text-[12px] text-muted-foreground">
-          <span className="sr-only sm:not-sr-only">Region</span>
-          <select
-            value={regionFilter}
-            onChange={(e) => setRegionFilter(e.target.value)}
-            className="h-8 rounded-md border border-input bg-background px-2 text-[12.5px] text-foreground"
+    <VStack gap={3}>
+      <Toolbar
+        label="Regional risk ranking controls"
+        size="sm"
+        startContent={
+          <SegmentedControl
+            label="Risk calculation window"
+            size="sm"
+            value={String(windowDays)}
+            onChange={(val) => setWindowDays(Number(val))}
           >
-            <option value="all">All regions</option>
-            {REGIONS.map((r) => (
-              <option key={r.name} value={r.name}>
-                {r.name}
-              </option>
+            {WINDOWS.map((w) => (
+              <SegmentedControlItem key={w.days} value={w.days} label={w.label} />
             ))}
-          </select>
-        </label>
-        <button
-          type="button"
-          onClick={exportCsv}
-          className="ml-auto inline-flex items-center gap-1.5 px-2.5 h-8 rounded-md border border-input text-[12px] font-semibold text-muted-foreground hover:bg-muted hover:text-foreground transition-colors"
-        >
-          <Download className="size-3.5" /> CSV
-        </button>
-      </div>
+          </SegmentedControl>
+        }
+        endContent={
+          <HStack gap={2} align="center" wrap="wrap">
+            <Selector
+              label="Filter by region"
+              isLabelHidden
+              variant="secondary"
+              size="sm"
+              width={180}
+              options={regionOptions}
+              value={regionFilter}
+              onChange={setRegionFilter}
+            />
+            <Button
+              label="Export CSV"
+              variant="secondary"
+              size="sm"
+              icon={<Icon icon={Download} size="sm" />}
+              onClick={exportCsv}
+            />
+          </HStack>
+        }
+      />
 
-      <div className="overflow-x-auto rounded-md border border-border">
-        <table className="w-full min-w-[560px] text-[12.5px]">
-          <caption className="sr-only">
-            Regions ranked by hantavirus infection rate per 100,000 population in the selected
-            window
-          </caption>
-          <thead className="bg-muted/60 text-[11px] uppercase tracking-wider text-muted-foreground">
-            <tr>
-              {COLUMNS.map((col) => (
-                <th
-                  key={col.key}
-                  scope="col"
-                  aria-sort={
-                    sortKey === col.key ? (sortDir === "asc" ? "ascending" : "descending") : "none"
-                  }
-                  className={cn("px-4 py-2.5 font-semibold", col.align === "right" && "text-right")}
-                >
-                  <button
-                    type="button"
-                    onClick={() => toggleSort(col.key)}
-                    className="inline-flex items-center gap-1 hover:text-foreground transition-colors"
-                  >
-                    {col.label === "Cases" ? `Cases (${windowDays}d)` : col.label}
-                    {sortKey !== col.key ? (
-                      <ArrowUpDown className="size-3 opacity-40" />
-                    ) : sortDir === "asc" ? (
-                      <ArrowUp className="size-3" />
-                    ) : (
-                      <ArrowDown className="size-3" />
-                    )}
-                  </button>
-                </th>
-              ))}
-            </tr>
-          </thead>
-          <tbody>
+      {loading ? (
+        <VStack gap={2}>
+          <Skeleton width="100%" height={36} />
+          <Skeleton width="100%" height={36} index={1} />
+          <Skeleton width="100%" height={36} index={2} />
+          <Skeleton width="100%" height={36} index={3} />
+        </VStack>
+      ) : (
+        <Table density="compact" dividers="rows" hasHover isStriped={false}>
+          <TableHeader>
+            <TableRow>
+              <TableHeaderCell>
+                <Button
+                  label="Region"
+                  variant="ghost"
+                  size="sm"
+                  endContent={sortIcon("region")}
+                  onClick={() => toggleSort("region")}
+                />
+              </TableHeaderCell>
+              <TableHeaderCell>
+                <HStack justify="end" width="100%">
+                  <Button
+                    label="Population"
+                    variant="ghost"
+                    size="sm"
+                    endContent={sortIcon("pop")}
+                    onClick={() => toggleSort("pop")}
+                  />
+                </HStack>
+              </TableHeaderCell>
+              <TableHeaderCell>
+                <HStack justify="end" width="100%">
+                  <Button
+                    label="Total cases"
+                    variant="ghost"
+                    size="sm"
+                    endContent={sortIcon("total")}
+                    onClick={() => toggleSort("total")}
+                  />
+                </HStack>
+              </TableHeaderCell>
+              <TableHeaderCell>
+                <HStack justify="end" width="100%">
+                  <Button
+                    label="Confirmed"
+                    variant="ghost"
+                    size="sm"
+                    endContent={sortIcon("confirmed")}
+                    onClick={() => toggleSort("confirmed")}
+                  />
+                </HStack>
+              </TableHeaderCell>
+              <TableHeaderCell>
+                <HStack justify="end" width="100%">
+                  <Button
+                    label="Incidence / 100k"
+                    variant="ghost"
+                    size="sm"
+                    endContent={sortIcon("rate")}
+                    onClick={() => toggleSort("rate")}
+                  />
+                </HStack>
+              </TableHeaderCell>
+              <TableHeaderCell>Risk tier</TableHeaderCell>
+            </TableRow>
+          </TableHeader>
+          <TableBody>
             {rows.map((r) => {
-              const pct = (r.rate / max) * 100;
-              const hot = (rankByRate.get(r.region) ?? 99) < 2;
+              const tierColor =
+                r.tier === "High" ? "red" : r.tier === "Moderate" ? "orange" : "teal";
+              const barVariant =
+                r.tier === "High" ? "error" : r.tier === "Moderate" ? "warning" : "success";
               return (
-                <tr key={r.region} className="border-t border-border hover:bg-muted/40">
-                  <td className="px-4 py-2.5 font-medium">
-                    <span className="flex items-center gap-2">
-                      {hot && <TrendingUp className="size-3.5 text-alert shrink-0" />}
-                      {r.region}
-                    </span>
-                  </td>
-                  <td className="px-4 py-2.5 text-right tabular-nums text-muted-foreground">
-                    {r.pop.toLocaleString()}
-                  </td>
-                  <td className="px-4 py-2.5 text-right tabular-nums">{r.total}</td>
-                  <td className="px-4 py-2.5 text-right tabular-nums">{r.confirmed}</td>
-                  <td className="px-4 py-2.5">
-                    <span className="flex items-center gap-2">
-                      <span className="flex-1 h-1.5 bg-muted rounded-full overflow-hidden">
-                        <span
-                          className={cn("block h-full rounded-full", hot ? "bg-alert" : "bg-teal")}
-                          style={{ width: `${pct}%` }}
+                <TableRow key={r.region}>
+                  <TableCell>
+                    <Link href={`/map?region=${encodeURIComponent(r.region)}`} isStandalone={false}>
+                      <Text type="body" weight="medium">
+                        {r.region}
+                      </Text>
+                    </Link>
+                  </TableCell>
+                  <TableCell>
+                    <Text
+                      type="body"
+                      justify="end"
+                      display="block"
+                      hasTabularNumbers
+                      color="secondary"
+                    >
+                      {r.pop.toLocaleString()}
+                    </Text>
+                  </TableCell>
+                  <TableCell>
+                    <Text
+                      type="body"
+                      justify="end"
+                      display="block"
+                      weight="semibold"
+                      hasTabularNumbers
+                    >
+                      {r.total}
+                    </Text>
+                  </TableCell>
+                  <TableCell>
+                    <Text type="body" justify="end" display="block" hasTabularNumbers>
+                      {r.confirmed}
+                    </Text>
+                  </TableCell>
+                  <TableCell>
+                    <HStack justify="end" align="center" gap={3} width="100%">
+                      <VStack width={80}>
+                        <ProgressBar
+                          label={`${r.region} relative incidence`}
+                          value={Math.min(100, (r.rate / maxRate) * 100)}
+                          max={100}
+                          variant={barVariant}
+                          isLabelHidden
                         />
-                      </span>
-                      <span className="tabular-nums font-semibold w-12 text-right">{r.rate}</span>
-                    </span>
-                  </td>
-                </tr>
+                      </VStack>
+                      <Text type="body" hasTabularNumbers weight="medium">
+                        {r.rate.toFixed(2)}
+                      </Text>
+                    </HStack>
+                  </TableCell>
+                  <TableCell>
+                    <Token size="sm" color={tierColor} label={r.tier} />
+                  </TableCell>
+                </TableRow>
               );
             })}
-          </tbody>
-        </table>
-      </div>
-    </div>
+          </TableBody>
+        </Table>
+      )}
+    </VStack>
   );
 }

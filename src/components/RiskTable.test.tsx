@@ -111,7 +111,7 @@ describe("RiskTable", () => {
     const user = userEvent.setup();
     render(<RiskTable />);
 
-    const casesHeader = screen.getByRole("button", { name: /Cases/ });
+    const casesHeader = screen.getByRole("button", { name: /Total cases/i });
     await user.click(casesHeader); // descending: Pampeana has the most cases
     expect(document.querySelector("tbody tr td")?.textContent).toContain("Pampeana");
 
@@ -123,7 +123,8 @@ describe("RiskTable", () => {
     const user = userEvent.setup();
     render(<RiskTable />);
 
-    await user.selectOptions(screen.getByRole("combobox"), "Cuyo");
+    await user.click(screen.getByRole("combobox"));
+    await user.click(await screen.findByRole("option", { name: "Cuyo" }));
     expect(tableRows().queryByText("Pampeana")).not.toBeInTheDocument();
     expect(tableRows().getByText("Cuyo")).toBeInTheDocument();
   });

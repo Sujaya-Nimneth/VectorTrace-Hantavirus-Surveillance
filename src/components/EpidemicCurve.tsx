@@ -1,20 +1,29 @@
 import { useMemo } from "react";
 import {
-  Line,
-  ComposedChart,
-  Bar,
-  XAxis,
-  YAxis,
-  Tooltip,
-  ResponsiveContainer,
   CartesianGrid,
   Legend,
+  Line,
+  LineChart,
+  ResponsiveContainer,
+  Tooltip,
+  XAxis,
+  YAxis,
 } from "recharts";
+import { Skeleton } from "@astryxdesign/core/Skeleton";
+import { VStack } from "@astryxdesign/core/VStack";
 import { useCases } from "@/hooks/use-surveillance";
 import { REGIONS } from "@/lib/mock-data";
 import { buildEpidemicCurveBuckets } from "@/lib/epi-curve";
 import { QueryError } from "./QueryError";
-import { Skeleton } from "./Skeleton";
+
+const REGION_STROKES = [
+  "var(--color-data-blue-4)",
+  "var(--color-data-teal-4)",
+  "var(--color-data-orange-4)",
+  "var(--color-data-purple-4)",
+  "var(--color-data-green-4)",
+  "var(--color-data-red-4)",
+];
 
 export function EpidemicCurve({ days = 90 }: { days?: 7 | 30 | 90 }) {
   const { data: CASES, loading, error, refetch } = useCases();
@@ -29,69 +38,67 @@ export function EpidemicCurve({ days = 90 }: { days?: 7 | 30 | 90 }) {
     [CASES, days],
   );
 
-  const palette = [
-    "var(--chart-3)",
-    "var(--chart-2)",
-    "var(--chart-1)",
-    "var(--chart-4)",
-    "var(--chart-5)",
-    "var(--primary)",
-  ];
-
-  const xAxisInterval = days === 7 ? 0 : 3;
-
   if (error) {
-    return (
-      <div className="h-[300px] grid place-items-center px-4">
-        <div className="w-full max-w-md">
-          <QueryError what="epidemic curve" error={error} onRetry={() => refetch()} />
-        </div>
-      </div>
-    );
+    return <QueryError what="epidemic curve" error={error} onRetry={() => refetch()} />;
   }
 
   if (loading) {
-    return <Skeleton className="h-[300px] w-full" />;
+    return <Skeleton width="100%" height={300} radius={2} />;
   }
 
   return (
-    <ResponsiveContainer width="100%" height={300}>
-      <ComposedChart data={data} margin={{ top: 10, right: 16, bottom: 0, left: -20 }}>
-        <CartesianGrid stroke="var(--border)" vertical={false} />
-        <XAxis
-          dataKey="date"
-          tick={{ fontSize: 10, fill: "var(--muted-foreground)" }}
-          interval={xAxisInterval}
-          axisLine={false}
-          tickLine={false}
-        />
-        <YAxis
-          tick={{ fontSize: 10, fill: "var(--muted-foreground)" }}
-          axisLine={false}
-          tickLine={false}
-          allowDecimals={false}
-        />
-        <Tooltip
-          contentStyle={{
-            background: "var(--card)",
-            border: "1px solid var(--border)",
-            borderRadius: 6,
-            fontSize: 12,
-          }}
-        />
-        <Legend wrapperStyle={{ fontSize: 11, paddingTop: 8 }} iconSize={8} />
-        {REGIONS.map((r, i) => (
-          <Bar key={r.name} dataKey={r.name} stackId="a" fill={palette[i]} />
-        ))}
-        <Line
-          type="monotone"
-          dataKey="trend"
-          stroke="var(--alert)"
-          strokeWidth={2}
-          dot={false}
-          name="Moving avg"
-        />
-      </ComposedChart>
-    </ResponsiveContainer>
+    <VStack width="100%" height={300}>
+      <ResponsiveContainer width="100%" height={300}>
+        <LineChart data={data} margin={{ top: 8, right: 12, left: -16, bottom: 4 }}>
+          <CartesianGrid
+            strokeDasharray="3 3"
+            stroke="var(--color-border-primary)"
+            vertical={false}
+          />
+          <XAxis
+            dataKey="label"
+            tick={{ fontSize: 11, fill: "var(--color-text-secondary)" }}
+            tickLine={false}
+            axisLine={{ stroke: "var(--color-border-primary)" }}
+          />
+          <YAxis
+            allowDecimals={false}
+            tickCount={4}
+            tick={{ fontSize: 11, fill: "var(--color-text-secondary)" }}
+            tickLine={false}
+            axisLine={false}
+          />
+          <Tooltip
+            contentStyle={{
+              backgroundColor: "var(--color-background-card)",
+              borderColor: "var(--color-border-primary)",
+              borderRadius: "var(--radius-md)",
+              color: "var(--color-text-primary)",
+              fontSize: "12px",
+            }}
+            itemStyle={{ paddingTop: 2, paddingBottom: 2 }}
+          />
+          <Legend
+            wrapperStyle={{
+              fontSize: "12px",
+              paddingTop: "8px",
+              color: "var(--color-text-secondary)",
+            }}
+          />
+          {REGIONS.map((region, idx) => (
+            <Line
+              key={region.name}
+              type="linear"
+              dataKey={region.name}
+              stroke={REGION_STROKES[idx % REGION_STROKES.length]}
+              strokeWidth={2}
+              dot={false}
+              activeDot={{ r: 4 }}
+              isAnimationActive={false}
+            />
+          ))}
+        </LineChart>
+      </ResponsiveContainer>
+    </VStack>
   );
 }

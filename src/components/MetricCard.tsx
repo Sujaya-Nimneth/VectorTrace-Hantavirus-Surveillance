@@ -1,19 +1,15 @@
-import { ArrowUpRight, ArrowDownRight, Minus, type LucideIcon } from "lucide-react";
-import { Sparklines } from "./Spark";
-import { cn } from "@/lib/utils";
+import { VStack } from "@astryxdesign/core/VStack";
+import { HStack } from "@astryxdesign/core/HStack";
+import { Text } from "@astryxdesign/core/Text";
+import { StatusDot } from "@astryxdesign/core/StatusDot";
 
-type Tone = "alert" | "warning" | "info" | "success";
-const toneRing: Record<Tone, string> = {
-  alert: "before:bg-alert",
-  warning: "before:bg-warning",
-  info: "before:bg-info",
-  success: "before:bg-success",
-};
-const toneText: Record<Tone, string> = {
-  alert: "text-alert",
-  warning: "text-warning",
-  info: "text-info",
-  success: "text-success",
+type Tone = "alert" | "teal" | "info" | "warning";
+
+const TONE_DOT: Record<Tone, "error" | "accent" | "neutral" | "warning"> = {
+  alert: "error",
+  teal: "accent",
+  info: "neutral",
+  warning: "warning",
 };
 
 export function MetricCard({
@@ -21,72 +17,56 @@ export function MetricCard({
   value,
   delta,
   tone,
-  icon: Icon,
-  spark,
   invertDelta = false,
+  windowLabel = "vs prior 30d",
 }: {
   label: string;
   value: string;
   /** null = no prior baseline (first period with data) — rendered as "New". */
   delta: number | null;
   tone: Tone;
-  icon: LucideIcon;
-  spark: number[];
   invertDelta?: boolean;
+  windowLabel?: string;
 }) {
-  const isZero = delta === 0;
-  const isNew = delta == null;
-  const up = (delta ?? 0) > 0;
-  const isBad = invertDelta ? (delta ?? 0) < 0 : (delta ?? 0) > 0;
+  const isPositiveDelta = delta !== null && delta > 0;
+  const isZeroDelta = delta === 0;
+  const deltaVariant =
+    delta === null
+      ? "accent"
+      : isZeroDelta
+        ? "neutral"
+        : isPositiveDelta
+          ? invertDelta
+            ? "success"
+            : "error"
+          : invertDelta
+            ? "error"
+            : "success";
+
+  const deltaText = delta === null ? "New" : `${delta > 0 ? "+" : ""}${delta}% 30d`;
 
   return (
-    <div
-      className={cn(
-        "relative bg-card border border-border rounded-lg p-4 overflow-hidden",
-        "before:absolute before:left-0 before:top-0 before:bottom-0 before:w-1",
-        toneRing[tone],
-      )}
-    >
-      <div className="flex items-start justify-between">
-        <div>
-          <div className="text-[11px] font-medium uppercase tracking-wider text-muted-foreground">
-            {label}
-          </div>
-          <div className="mt-1.5 text-3xl font-bold tracking-tight tabular-nums">{value}</div>
-        </div>
-        <div className={cn("size-8 rounded-md grid place-items-center bg-muted", toneText[tone])}>
-          <Icon className="size-4" />
-        </div>
-      </div>
-      <div className="mt-3 flex items-end justify-between gap-3">
-        <div
-          className={cn(
-            "inline-flex items-center gap-0.5 text-[11px] font-semibold px-1.5 py-0.5 rounded",
-            isNew
-              ? "text-info bg-info/10"
-              : isZero
-                ? "text-muted-foreground bg-muted"
-                : isBad
-                  ? "text-alert bg-alert/10"
-                  : "text-success bg-success/10",
-          )}
-        >
-          {isNew ? (
-            "New"
-          ) : isZero ? (
-            <>
-              <Minus className="size-3" />
-              0% 30d
-            </>
-          ) : (
-            <>
-              {up ? <ArrowUpRight className="size-3" /> : <ArrowDownRight className="size-3" />}
-              {Math.abs(delta)}% 30d
-            </>
-          )}
-        </div>
-        <Sparklines data={spark} tone={tone} />
-      </div>
-    </div>
+    <VStack gap={1.5} minHeight={84} justify="between">
+      <HStack justify="between" align="center" gap={2}>
+        <Text type="label" color="secondary" maxLines={1}>
+          {label}
+        </Text>
+        <StatusDot variant={TONE_DOT[tone]} label={label} />
+      </HStack>
+
+      <Text type="display-3" weight="semibold" hasTabularNumbers>
+        {value}
+      </Text>
+
+      <HStack gap={1.5} align="center">
+        <StatusDot variant={deltaVariant} label={deltaText} />
+        <Text type="supporting" size="xsm" weight="medium" hasTabularNumbers>
+          {deltaText}
+        </Text>
+        <Text type="supporting" size="xsm" color="secondary">
+          {windowLabel}
+        </Text>
+      </HStack>
+    </VStack>
   );
 }
