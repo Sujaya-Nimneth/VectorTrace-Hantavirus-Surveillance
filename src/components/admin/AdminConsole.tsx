@@ -39,7 +39,7 @@ function HealthStat({
       <Text type="display-3" weight="semibold" hasTabularNumbers>
         {value}
       </Text>
-      <Text type="supporting" size="xsm" hasTabularNumbers>
+      <Text type="supporting" hasTabularNumbers>
         {subtext}
       </Text>
     </VStack>

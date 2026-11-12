@@ -17,9 +17,7 @@ export function Sidebar() {
       footer={
         <HStack gap={2} align="center" paddingInline={2} paddingBlock={1}>
           <StatusDot variant="success" label="Surveillance feed active" isPulsing />
-          <Text type="supporting" size="xsm">
-            WHO DON · Field Ops
-          </Text>
+          <Text type="supporting">WHO DON · Field Ops</Text>
         </HStack>
       }
     >

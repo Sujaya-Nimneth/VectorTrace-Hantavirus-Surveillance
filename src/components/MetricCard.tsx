@@ -60,10 +60,10 @@ export function MetricCard({
 
       <HStack gap={1.5} align="center">
         <StatusDot variant={deltaVariant} label={deltaText} />
-        <Text type="supporting" size="xsm" weight="medium" hasTabularNumbers>
+        <Text type="supporting" weight="medium" hasTabularNumbers>
           {deltaText}
         </Text>
-        <Text type="supporting" size="xsm" color="secondary">
+        <Text type="supporting" color="secondary">
           {windowLabel}
         </Text>
       </HStack>

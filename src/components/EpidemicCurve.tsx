@@ -21,7 +21,7 @@ const REGION_STROKES = [
   "var(--color-data-teal-4)",
   "var(--color-data-orange-4)",
   "var(--color-data-purple-4)",
-  "var(--color-data-green-4)",
+  "var(--color-data-shamrock-4)",
   "var(--color-data-red-4)",
 ];
 
@@ -43,35 +43,32 @@ export function EpidemicCurve({ days = 90 }: { days?: 7 | 30 | 90 }) {
   }
 
   if (loading) {
-    return <Skeleton width="100%" height={300} radius={2} />;
+    return <Skeleton width="100%" height={360} radius={2} />;
   }
 
   return (
-    <VStack width="100%" height={300}>
-      <ResponsiveContainer width="100%" height={300}>
+    <VStack width="100%" height={360}>
+      <ResponsiveContainer width="100%" height={360}>
         <LineChart data={data} margin={{ top: 8, right: 12, left: -16, bottom: 4 }}>
-          <CartesianGrid
-            strokeDasharray="3 3"
-            stroke="var(--color-border-primary)"
-            vertical={false}
-          />
+          <CartesianGrid strokeDasharray="3 3" stroke="var(--color-border)" vertical={false} />
           <XAxis
-            dataKey="label"
-            tick={{ fontSize: 11, fill: "var(--color-text-secondary)" }}
+            dataKey="date"
+            minTickGap={24}
+            tick={{ fontSize: 12, fill: "var(--color-text-secondary)" }}
             tickLine={false}
-            axisLine={{ stroke: "var(--color-border-primary)" }}
+            axisLine={{ stroke: "var(--color-border)" }}
           />
           <YAxis
             allowDecimals={false}
             tickCount={4}
-            tick={{ fontSize: 11, fill: "var(--color-text-secondary)" }}
+            tick={{ fontSize: 12, fill: "var(--color-text-secondary)" }}
             tickLine={false}
             axisLine={false}
           />
           <Tooltip
             contentStyle={{
               backgroundColor: "var(--color-background-card)",
-              borderColor: "var(--color-border-primary)",
+              borderColor: "var(--color-border)",
               borderRadius: "var(--radius-md)",
               color: "var(--color-text-primary)",
               fontSize: "12px",

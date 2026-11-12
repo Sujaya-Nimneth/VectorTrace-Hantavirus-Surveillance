@@ -24,9 +24,7 @@ export function SourcesPanel({ sources }: { sources: SourceStatus[] }) {
         <HStack justify="between" align="center" gap={2} wrap="wrap">
           <VStack gap={0.5}>
             <Heading level={2}>Data Engine · Ingest Feeds &amp; APIs</Heading>
-            <Text type="supporting" size="xsm">
-              External feed sync status and response latency
-            </Text>
+            <Text type="supporting">External feed sync status and response latency</Text>
           </VStack>
           <Token size="sm" color={badgeColor} label={badgeLabel} />
         </HStack>
@@ -49,9 +47,7 @@ export function SourcesPanel({ sources }: { sources: SourceStatus[] }) {
                 description={
                   s.lastCheckedAt ? (
                     <HStack gap={1} align="center">
-                      <Text type="supporting" size="xsm">
-                        Checked
-                      </Text>
+                      <Text type="supporting">Checked</Text>
                       <Timestamp value={s.lastCheckedAt} format="relative_short" isLive />
                     </HStack>
                   ) : (
@@ -59,7 +55,7 @@ export function SourcesPanel({ sources }: { sources: SourceStatus[] }) {
                   )
                 }
                 endContent={
-                  <Text type="supporting" size="xsm" hasTabularNumbers>
+                  <Text type="supporting" hasTabularNumbers>
                     {s.latencyMs != null ? `${s.latencyMs}ms` : "—"} ·{" "}
                     {s.recordsIngested != null ? `${s.recordsIngested} rec` : "—"}
                   </Text>

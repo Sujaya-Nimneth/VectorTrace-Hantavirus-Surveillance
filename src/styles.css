@@ -21,7 +21,7 @@
   --color-accent-foreground: var(--color-text-primary);
   --color-destructive: var(--color-data-red-4);
   --color-destructive-foreground: var(--color-text-inverted);
-  --color-input: var(--color-border-primary);
+  --color-input: var(--color-border);
   --color-ring: var(--color-accent);
   --color-teal: var(--color-data-teal-4);
   --color-teal-foreground: var(--color-text-inverted);
@@ -29,7 +29,7 @@
   --color-alert-foreground: var(--color-text-inverted);
   --color-warning: var(--color-data-orange-4);
   --color-warning-foreground: var(--color-text-primary);
-  --color-success: var(--color-data-green-4);
+  --color-success: var(--color-data-shamrock-4);
   --color-success-foreground: var(--color-text-inverted);
   --color-info: var(--color-data-blue-4);
   --color-info-foreground: var(--color-text-inverted);
@@ -38,11 +38,18 @@
   --color-map-rodent: var(--color-data-purple-4);
   --color-terminal-bg: var(--color-background-card);
   --color-terminal-header: var(--color-background-muted);
-  --color-terminal: var(--color-data-green-4);
+  --color-terminal: var(--color-data-shamrock-4);
   --color-terminal-dim: var(--color-text-secondary);
   --color-chart-1: var(--color-data-red-4);
   --color-chart-2: var(--color-data-teal-4);
   --color-chart-3: var(--color-data-blue-4);
   --color-chart-4: var(--color-data-orange-4);
-  --color-chart-5: var(--color-data-green-4);
+  --color-chart-5: var(--color-data-shamrock-4);
+}
+
+@layer base {
+  body {
+    background-color: var(--color-background-body);
+    color: var(--color-text-primary);
+  }
 }

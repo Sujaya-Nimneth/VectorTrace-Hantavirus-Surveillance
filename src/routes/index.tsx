@@ -129,13 +129,13 @@ function LandingPage() {
       />
 
       <LayoutContent padding={0} isScrollable={false}>
-        <Section padding={8}>
+        <Section paddingInline={6} paddingBlock={8}>
           <Center axis="horizontal" width="100%">
             <VStack maxWidth={1160} width="100%">
               <Grid columns={{ minWidth: 320, max: 2, repeat: "fit" }} gap={8} align="center">
                 <VStack gap={5}>
                   <Heading level={1} type="display-1">
-                    Regional Hantavirus Vector &amp; Case Surveillance
+                    VectorTrace Surveillance
                   </Heading>
 
                   <Text type="large" color="secondary">
@@ -287,7 +287,7 @@ function LandingPage() {
           </Center>
         </Section>
 
-        <Section variant="muted" padding={8} dividers={["top"]}>
+        <Section variant="muted" paddingInline={6} paddingBlock={8}>
           <Center axis="horizontal" width="100%">
             <VStack gap={5} maxWidth={1160} width="100%">
               <VStack gap={1}>
@@ -341,7 +341,7 @@ function LandingPage() {
         </Section>
       </LayoutContent>
 
-      <LayoutFooter hasDivider>
+      <LayoutFooter>
         <HStack
           justify="between"
           align="center"
@@ -350,9 +350,7 @@ function LandingPage() {
           paddingInline={6}
           paddingBlock={4}
         >
-          <Text type="supporting" size="xsm">
-            VectorTrace · Hantavirus Epidemiological Surveillance
-          </Text>
+          <Text type="supporting">VectorTrace · Hantavirus Epidemiological Surveillance</Text>
           <HStack gap={4}>
             <Link href="/dashboard" isStandalone={false}>
               Dashboard

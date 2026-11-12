@@ -218,7 +218,7 @@ export function TopBar() {
         }
         endContent={
           <HStack gap={2} align="center">
-            <HStack gap={1.5} align="center">
+            <HStack gap={1.5} align="center" className="hidden sm:flex">
               <Button
                 label="Search…"
                 variant="secondary"
@@ -227,6 +227,16 @@ export function TopBar() {
                 onClick={() => setPaletteOpen(true)}
               />
               <Kbd keys="mod+k" />
+            </HStack>
+            <HStack className="sm:hidden" align="center">
+              <IconButton
+                label="Search surveillance records"
+                tooltip="Search (⌘K)"
+                variant="secondary"
+                size="sm"
+                icon={<Icon icon={Search} size="sm" />}
+                onClick={() => setPaletteOpen(true)}
+              />
             </HStack>
 
             <Popover
@@ -364,9 +374,7 @@ export function TopBar() {
               </Text>
             </HStack>
             {item.auxiliaryData?.subtitle && (
-              <Text type="supporting" size="xsm">
-                {item.auxiliaryData.subtitle}
-              </Text>
+              <Text type="supporting">{item.auxiliaryData.subtitle}</Text>
             )}
           </HStack>
         )}

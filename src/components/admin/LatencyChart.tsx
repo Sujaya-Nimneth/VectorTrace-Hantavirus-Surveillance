@@ -29,11 +29,9 @@ export function LatencyChart({
         <HStack justify="between" align="center" gap={2} wrap="wrap">
           <VStack gap={0.5}>
             <Heading level={2}>Database Query Latency</Heading>
-            <Text type="supporting" size="xsm">
-              Observed probe timings vs 220ms SLO threshold
-            </Text>
+            <Text type="supporting">Observed probe timings vs 220ms SLO threshold</Text>
           </VStack>
-          <Text type="supporting" size="xsm" weight="medium" hasTabularNumbers>
+          <Text type="supporting" weight="medium" hasTabularNumbers>
             {avgLatency != null ? `Mean ${avgLatency}ms` : "No samples"}
           </Text>
         </HStack>
@@ -50,26 +48,26 @@ export function LatencyChart({
               <LineChart data={series} margin={{ top: 8, right: 12, left: -16, bottom: 4 }}>
                 <CartesianGrid
                   strokeDasharray="3 3"
-                  stroke="var(--color-border-primary)"
+                  stroke="var(--color-border)"
                   vertical={false}
                 />
                 <XAxis
                   dataKey="t"
-                  tick={{ fontSize: 11, fill: "var(--color-text-secondary)" }}
+                  tick={{ fontSize: 12, fill: "var(--color-text-secondary)" }}
                   tickLine={false}
-                  axisLine={{ stroke: "var(--color-border-primary)" }}
+                  axisLine={{ stroke: "var(--color-border)" }}
                 />
                 <YAxis
                   unit="ms"
                   tickCount={4}
-                  tick={{ fontSize: 11, fill: "var(--color-text-secondary)" }}
+                  tick={{ fontSize: 12, fill: "var(--color-text-secondary)" }}
                   tickLine={false}
                   axisLine={false}
                 />
                 <Tooltip
                   contentStyle={{
                     backgroundColor: "var(--color-background-card)",
-                    borderColor: "var(--color-border-primary)",
+                    borderColor: "var(--color-border)",
                     borderRadius: "var(--radius-md)",
                     color: "var(--color-text-primary)",
                     fontSize: "12px",

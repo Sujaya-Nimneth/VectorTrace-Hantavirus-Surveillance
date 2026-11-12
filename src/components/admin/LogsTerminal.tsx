@@ -35,7 +35,7 @@ export function LogsTerminal({ logs }: { logs: LogEntry[] }) {
           startContent={
             <HStack gap={2} align="center">
               <Heading level={2}>System Logs</Heading>
-              <Text type="supporting" size="xsm" hasTabularNumbers>
+              <Text type="supporting" hasTabularNumbers>
                 {filtered.length} {filtered.length === 1 ? "entry" : "entries"}
               </Text>
             </HStack>

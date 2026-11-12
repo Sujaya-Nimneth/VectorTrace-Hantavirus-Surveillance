@@ -13,7 +13,6 @@ import "leaflet.heat";
 import { useNavigate, useSearch } from "@tanstack/react-router";
 
 import { Layout, LayoutContent, LayoutFooter, LayoutHeader } from "@astryxdesign/core/Layout";
-import { Toolbar } from "@astryxdesign/core/Toolbar";
 import { SegmentedControl, SegmentedControlItem } from "@astryxdesign/core/SegmentedControl";
 import { ToggleButton, ToggleButtonGroup } from "@astryxdesign/core/ToggleButton";
 import { Selector } from "@astryxdesign/core/Selector";
@@ -165,12 +164,10 @@ const RodentPin = memo(function RodentPin({ r }: { r: RodentSite }) {
           <Text type="label" weight="semibold">
             {r.id} · {r.region}
           </Text>
-          <Text type="supporting" size="xsm">
+          <Text type="supporting">
             {r.species} · {(r.positivity * 100).toFixed(0)}% seropositive
           </Text>
-          <Text type="supporting" size="xsm">
-            Sampled {r.date}
-          </Text>
+          <Text type="supporting">Sampled {r.date}</Text>
         </VStack>
       </Popup>
     </Marker>
@@ -333,56 +330,57 @@ export function MapView() {
   return (
     <Layout height="fill" padding={0}>
       <LayoutHeader hasDivider>
-        <VStack gap={0} paddingInline={4} paddingBlock={2}>
-          <Toolbar
-            label="Geospatial tracker controls"
-            size="sm"
-            startContent={
-              <HStack gap={2} align="center" wrap="wrap">
-                <SegmentedControl
-                  label="Date window"
-                  size="sm"
-                  value={String(days)}
-                  onChange={(v) => setDays(Number(v) as 7 | 30 | 90)}
-                >
-                  {RANGES.map((r) => (
-                    <SegmentedControlItem key={r.days} value={String(r.days)} label={r.label} />
-                  ))}
-                </SegmentedControl>
+        <HStack
+          justify="between"
+          align="center"
+          gap={3}
+          wrap="wrap"
+          paddingInline={4}
+          paddingBlock={2}
+        >
+          <HStack gap={3} align="center" wrap="wrap">
+            <Heading level={1}>Geospatial Tracker</Heading>
+            <SegmentedControl
+              label="Date window"
+              size="sm"
+              value={String(days)}
+              onChange={(v) => setDays(Number(v) as 7 | 30 | 90)}
+            >
+              {RANGES.map((r) => (
+                <SegmentedControlItem key={r.days} value={String(r.days)} label={r.label} />
+              ))}
+            </SegmentedControl>
 
-                <Selector
-                  label="Focus region"
-                  isLabelHidden
-                  variant="secondary"
-                  size="sm"
-                  width={180}
-                  options={regionOptions}
-                  value={selectedRegion}
-                  onChange={handleRegionChange}
-                />
-              </HStack>
-            }
-            endContent={
-              <ToggleButtonGroup
-                type="multiple"
-                label="Map data layers"
-                size="sm"
-                value={activeLayers}
-                onChange={(vals) => setActiveLayers((vals as string[]) ?? [])}
-              >
-                <ToggleButton value="cases" label="Human cases">
-                  Human cases
-                </ToggleButton>
-                <ToggleButton value="rodents" label="Rodent traps">
-                  Rodent traps
-                </ToggleButton>
-                <ToggleButton value="heat" label="Density heat">
-                  Density heat
-                </ToggleButton>
-              </ToggleButtonGroup>
-            }
-          />
-        </VStack>
+            <Selector
+              label="Focus region"
+              isLabelHidden
+              variant="secondary"
+              size="sm"
+              width={168}
+              options={regionOptions}
+              value={selectedRegion}
+              onChange={handleRegionChange}
+            />
+          </HStack>
+
+          <ToggleButtonGroup
+            type="multiple"
+            label="Map data layers"
+            size="sm"
+            value={activeLayers}
+            onChange={(vals) => setActiveLayers((vals as string[]) ?? [])}
+          >
+            <ToggleButton value="cases" label="Human cases">
+              Cases
+            </ToggleButton>
+            <ToggleButton value="rodents" label="Rodent traps">
+              Traps
+            </ToggleButton>
+            <ToggleButton value="heat" label="Density heat">
+              Heat
+            </ToggleButton>
+          </ToggleButtonGroup>
+        </HStack>
       </LayoutHeader>
 
       <LayoutContent padding={0} isScrollable={false}>
@@ -462,31 +460,23 @@ export function MapView() {
           <HStack gap={4} align="center" wrap="wrap">
             <HStack gap={1.5} align="center">
               <StatusDot variant="error" label="Confirmed case" />
-              <Text type="supporting" size="xsm">
-                Confirmed
-              </Text>
+              <Text type="supporting">Confirmed</Text>
             </HStack>
             <HStack gap={1.5} align="center">
               <StatusDot variant="warning" label="Suspected case" />
-              <Text type="supporting" size="xsm">
-                Suspected
-              </Text>
+              <Text type="supporting">Suspected</Text>
             </HStack>
             <HStack gap={1.5} align="center">
               <StatusDot variant="accent" label="Pending lab" />
-              <Text type="supporting" size="xsm">
-                Pending
-              </Text>
+              <Text type="supporting">Pending</Text>
             </HStack>
             <HStack gap={1.5} align="center">
               <StatusDot variant="success" label="Rodent trap site" />
-              <Text type="supporting" size="xsm">
-                Rodent trap
-              </Text>
+              <Text type="supporting">Rodent trap</Text>
             </HStack>
           </HStack>
 
-          <Text type="supporting" size="xsm" hasTabularNumbers>
+          <Text type="supporting" hasTabularNumbers>
             {visibleCases.length} plotted cases · {visibleRodents.length} trap sites · 5 km
             proximity check
           </Text>
@@ -537,9 +527,7 @@ export function MapView() {
                   ))}
                 </HStack>
               ) : (
-                <Text type="supporting" size="xsm">
-                  No symptoms recorded.
-                </Text>
+                <Text type="supporting">No symptoms recorded.</Text>
               )}
             </VStack>
 

@@ -183,13 +183,13 @@ function DashboardPage() {
             )}
           </Card>
 
-          <Grid columns={{ minWidth: 340, max: 2, repeat: "fit" }} gap={4}>
+          <Grid columns={{ minWidth: 340, max: 2, repeat: "fit" }} gap={4} align="start">
             <Card padding={5}>
               <VStack gap={4}>
                 <HStack justify="between" align="center" gap={3} wrap="wrap">
                   <VStack gap={0.5}>
                     <Heading level={2}>Epidemic Curve</Heading>
-                    <Text type="supporting" size="xsm">
+                    <Text type="supporting">
                       Case onset counts by region (straight linear segments)
                     </Text>
                   </VStack>
@@ -212,7 +212,7 @@ function DashboardPage() {
               <VStack gap={4}>
                 <VStack gap={0.5}>
                   <Heading level={2}>Alerts Feed</Heading>
-                  <Text type="supporting" size="xsm">
+                  <Text type="supporting">
                     Select any alert to center the geospatial map on the affected region
                   </Text>
                 </VStack>
@@ -225,7 +225,7 @@ function DashboardPage() {
             <VStack gap={4}>
               <VStack gap={0.5}>
                 <Heading level={2}>Regional Incidence &amp; Risk Ranking</Heading>
-                <Text type="supporting" size="xsm">
+                <Text type="supporting">
                   Population-adjusted incidence per 100k inhabitants over the selected window
                 </Text>
               </VStack>
