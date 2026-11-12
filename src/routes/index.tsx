@@ -1,182 +1,371 @@
-import { createFileRoute, Link } from "@tanstack/react-router";
+import { useMemo, useState } from "react";
+import { createFileRoute } from "@tanstack/react-router";
+import { TopNav, TopNavHeading, TopNavItem } from "@astryxdesign/core/TopNav";
+import { Layout, LayoutContent, LayoutFooter } from "@astryxdesign/core/Layout";
+import { Center } from "@astryxdesign/core/Center";
+import { Section } from "@astryxdesign/core/Section";
+import { Grid } from "@astryxdesign/core/Grid";
+import { Card } from "@astryxdesign/core/Card";
+import { VStack } from "@astryxdesign/core/VStack";
+import { HStack } from "@astryxdesign/core/HStack";
+import { Heading } from "@astryxdesign/core/Heading";
+import { Text } from "@astryxdesign/core/Text";
+import { Button } from "@astryxdesign/core/Button";
+import { IconButton } from "@astryxdesign/core/IconButton";
+import { Icon } from "@astryxdesign/core/Icon";
+import { Link } from "@astryxdesign/core/Link";
+import { MetadataList, MetadataListItem } from "@astryxdesign/core/MetadataList";
+import { SegmentedControl, SegmentedControlItem } from "@astryxdesign/core/SegmentedControl";
+import { StatusDot } from "@astryxdesign/core/StatusDot";
+import { Token } from "@astryxdesign/core/Token";
 import {
-  Activity,
-  ArrowRight,
-  Bug,
-  Globe2,
-  LayoutDashboard,
-  Lock,
-  Map,
-  Radar,
-  ServerCog,
-} from "lucide-react";
+  Table,
+  TableBody,
+  TableCell,
+  TableHeader,
+  TableHeaderCell,
+  TableRow,
+} from "@astryxdesign/core/Table";
+import { Activity, ArrowRight, FilePlus2, MapPin, Moon, Sun } from "lucide-react";
+
+import { useCases, useRodents } from "@/hooks/use-surveillance";
+import { useTheme } from "@/hooks/use-theme";
+import { REGIONS } from "@/lib/mock-data";
 
 export const Route = createFileRoute("/")({
-  component: Landing,
-  head: () => ({
-    meta: [
-      { title: "VectorTrace · Hantavirus Surveillance Command Center" },
-      {
-        name: "description",
-        content:
-          "Real-time hantavirus epidemiological tracking: executive dashboard, geospatial risk mapping, rapid case intake, and automated WHO outbreak-news ingestion.",
-      },
-    ],
-  }),
+  component: LandingPage,
+  head: () => ({ meta: [{ title: "VectorTrace · Hantavirus Epidemiological Surveillance" }] }),
 });
 
-const FEATURES = [
+const SUBSYSTEMS = [
   {
-    icon: LayoutDashboard,
-    title: "Executive dashboard",
-    body: "Live case metrics with trend deltas, a stacked epidemic curve, severity-filtered alerts, and a regional risk ranking with CSV export.",
+    name: "Surveillance Overview",
+    cadence: "30s poll",
+    contract: "30d / 90d epidemic curve & regional incidence / 100k",
+    href: "/dashboard",
+    cta: "Open overview",
   },
   {
-    icon: Map,
-    title: "Geospatial tracker",
-    body: "Leaflet mapping with case markers, rodent reservoir sites, a risk-density heat layer, and shareable focus URLs for every case.",
+    name: "Geospatial Proximity Tracker",
+    cadence: "On focus",
+    contract: "5 km Haversine overlap against Sigmodontinae trap sites",
+    href: "/map",
+    cta: "Open map",
   },
   {
-    icon: Bug,
-    title: "Rapid case intake",
-    body: "A four-step clinician workflow with schema-validated vocabularies, local drafts, and optimistic realtime updates.",
+    name: "Rapid Case Intake",
+    cadence: "Real-time",
+    contract: "4-step validated notification with browser draft recovery",
+    href: "/intake",
+    cta: "Submit case",
   },
   {
-    icon: Radar,
-    title: "Automated ingestion",
-    body: "A scheduled edge function pulls WHO Disease Outbreak News, normalizes and dedupes items, and raises alerts on new confirmations.",
-  },
-  {
-    icon: Lock,
-    title: "Row-level security",
-    body: "Supabase RLS with admin, epidemiologist, and viewer roles. Clinical details stay behind authenticated read; the public sees a safe projection.",
-  },
-  {
-    icon: ServerCog,
-    title: "Observability console",
-    body: "Ingest success rates, feed uptime, and database latency percentiles in an admin-only console, code-split out of the main bundle.",
+    name: "Infrastructure Diagnostics",
+    cadence: "30s probe",
+    contract: "Cron cadence, 220ms DB latency SLO & system feed logs",
+    href: "/admin",
+    cta: "Inspect ops",
   },
 ];
 
-function Landing() {
+function LandingPage() {
+  const { theme, toggle } = useTheme();
+  const { data: cases = [] } = useCases();
+  const { data: rodents = [] } = useRodents();
+  const [previewTab, setPreviewTab] = useState<"corridors" | "cases">("corridors");
+
+  const corridorRows = useMemo(() => {
+    return REGIONS.map((region) => {
+      const regionCases = cases.filter((c) => c.region === region.name);
+      const regionSites = rodents.filter((r) => r.region === region.name);
+      const confirmed = regionCases.filter((c) => c.status === "Confirmed").length;
+      const rate = region.pop > 0 ? (regionCases.length / region.pop) * 100_000 : 0;
+      return {
+        region: region.name,
+        total: regionCases.length,
+        confirmed,
+        sites: regionSites.length,
+        rate,
+      };
+    })
+      .sort((a, b) => b.rate - a.rate)
+      .slice(0, 5);
+  }, [cases, rodents]);
+
+  const recentCases = useMemo(() => cases.slice(0, 5), [cases]);
+
   return (
-    <div className="min-h-full bg-background">
-      {/* Hero */}
-      <section className="relative overflow-hidden border-b border-border">
-        <div
-          aria-hidden="true"
-          className="absolute inset-0 bg-[radial-gradient(60%_50%_at_50%_-10%,color-mix(in_oklch,var(--teal)_22%,transparent),transparent)]"
-        />
-        <div className="relative max-w-5xl mx-auto px-4 sm:px-6 py-16 sm:py-24 text-center">
-          <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full border border-teal/40 bg-teal/10 text-teal text-[11.5px] font-semibold">
-            <Activity className="size-3.5" /> Real-time epidemiological surveillance
-          </div>
-          <h1 className="mt-5 text-3xl sm:text-5xl font-bold tracking-tight leading-tight">
-            Track hantavirus outbreaks
-            <br className="hidden sm:block" /> before they spread.
-          </h1>
-          <p className="mt-4 max-w-2xl mx-auto text-[14px] sm:text-[15px] text-muted-foreground leading-relaxed">
-            VectorTrace combines a command-center dashboard, geospatial risk mapping, and a rapid
-            case intake workflow with an automated WHO Disease Outbreak News pipeline — secured by
-            Postgres row-level security and deployed to the edge.
-          </p>
-          <div className="mt-7 flex flex-wrap items-center justify-center gap-3">
-            <Link
-              to="/dashboard"
-              className="inline-flex items-center gap-2 px-5 h-11 rounded-md text-[14px] font-semibold bg-primary text-primary-foreground hover:bg-primary/90 transition-colors"
-            >
-              Open the Command Center <ArrowRight className="size-4" />
-            </Link>
-            <a
-              href="https://github.com/Sujaya-Nimneth/hanta-watch-central"
-              className="inline-flex items-center gap-2 px-5 h-11 rounded-md text-[14px] font-semibold border border-input hover:bg-muted transition-colors"
-            >
-              <Globe2 className="size-4" /> View on GitHub
-            </a>
-          </div>
-          <p className="mt-3 text-[11.5px] text-muted-foreground">
-            No account needed — the public dashboard runs on the live surveillance feed (or a
-            bundled demo dataset when unconfigured).
-          </p>
-
-          <div className="mt-10 sm:mt-14 rounded-xl border border-border shadow-2xl overflow-hidden bg-card">
-            <div className="flex items-center gap-1.5 px-4 py-2.5 border-b border-border bg-muted/60">
-              <span className="size-2.5 rounded-full bg-alert/70" />
-              <span className="size-2.5 rounded-full bg-warning/70" />
-              <span className="size-2.5 rounded-full bg-success/70" />
-              <span className="ml-3 text-[11px] text-muted-foreground font-mono truncate">
-                vectortrace · command center
-              </span>
-            </div>
-            <img
-              src="/screenshots/dashboard-dark.png"
-              alt="VectorTrace executive dashboard showing case metrics, the epidemic curve, and regional risk ranking"
-              className="w-full"
-              width={1440}
-              height={900}
+    <Layout height="auto" padding={0}>
+      <TopNav
+        label="Public surveillance header"
+        heading={
+          <TopNavHeading
+            logo={<Icon icon={Activity} size="md" color="accent" />}
+            heading="VectorTrace"
+            headingHref="/"
+          />
+        }
+        startContent={
+          <HStack gap={1} align="center">
+            <TopNavItem label="Dashboard" href="/dashboard" />
+            <TopNavItem label="Geo Tracker" href="/map" />
+            <TopNavItem label="Case Intake" href="/intake" />
+          </HStack>
+        }
+        endContent={
+          <HStack gap={2} align="center">
+            <IconButton
+              label={theme === "dark" ? "Switch to light mode" : "Switch to dark mode"}
+              tooltip={theme === "dark" ? "Light mode" : "Dark mode"}
+              variant="ghost"
+              size="sm"
+              icon={<Icon icon={theme === "dark" ? Sun : Moon} size="sm" />}
+              onClick={toggle}
             />
-          </div>
-        </div>
-      </section>
+            <Button label="Sign in" variant="secondary" size="sm" href="/login" />
+            <Button label="Open console" variant="primary" size="sm" href="/dashboard" />
+          </HStack>
+        }
+      />
 
-      {/* Features */}
-      <section className="max-w-5xl mx-auto px-4 sm:px-6 py-14 sm:py-20">
-        <h2 className="text-xl sm:text-2xl font-bold tracking-tight text-center">
-          A full surveillance stack, end to end
-        </h2>
-        <p className="mt-2 text-center text-[13px] text-muted-foreground">
-          Ingestion, analytics, field tools, and infrastructure observability in one platform.
-        </p>
-        <div className="mt-9 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-          {FEATURES.map((f) => (
-            <div
-              key={f.title}
-              className="bg-card border border-border rounded-lg p-5 hover:border-teal/40 transition-colors"
-            >
-              <div className="size-9 rounded-md grid place-items-center bg-teal/10 text-teal">
-                <f.icon className="size-4.5" />
-              </div>
-              <h3 className="mt-3.5 text-[14px] font-semibold">{f.title}</h3>
-              <p className="mt-1.5 text-[12.5px] text-muted-foreground leading-relaxed">{f.body}</p>
-            </div>
-          ))}
-        </div>
-      </section>
+      <LayoutContent padding={0} isScrollable={false}>
+        <Section padding={8}>
+          <Center axis="horizontal" width="100%">
+            <VStack maxWidth={1160} width="100%">
+              <Grid columns={{ minWidth: 320, max: 2, repeat: "fit" }} gap={8} align="center">
+                <VStack gap={5}>
+                  <Heading level={1} type="display-1">
+                    Regional Hantavirus Vector &amp; Case Surveillance
+                  </Heading>
 
-      {/* CTA strip */}
-      <section className="border-t border-border bg-card/60">
-        <div className="max-w-5xl mx-auto px-4 sm:px-6 py-12 flex flex-col sm:flex-row items-center justify-between gap-5">
-          <div>
-            <h2 className="text-[17px] font-bold tracking-tight">Ready to explore the data?</h2>
-            <p className="text-[12.5px] text-muted-foreground mt-1">
-              The dashboard and map are public; clinicians can sign in to submit cases.
-            </p>
-          </div>
-          <div className="flex flex-wrap gap-3">
-            <Link
-              to="/map"
-              className="inline-flex items-center gap-2 px-5 h-10 rounded-md text-[13.5px] font-semibold border border-input hover:bg-muted transition-colors"
-            >
-              <Map className="size-4" /> Open the map
+                  <Text type="large" color="secondary">
+                    Monitor six Southern Cone health corridors in real time — pairing human syndrome
+                    notifications with Sigmodontinae reservoir trapping data inside 5 km proximity
+                    radii.
+                  </Text>
+
+                  <HStack gap={3} align="center" wrap="wrap">
+                    <Button
+                      label="Open dashboard"
+                      variant="primary"
+                      size="lg"
+                      endContent={<Icon icon={ArrowRight} size="sm" />}
+                      href="/dashboard"
+                    />
+                    <Button
+                      label="Explore cluster map"
+                      variant="secondary"
+                      size="lg"
+                      icon={<Icon icon={MapPin} size="sm" />}
+                      href="/map"
+                    />
+                    <Button
+                      label="Submit case"
+                      variant="ghost"
+                      size="lg"
+                      icon={<Icon icon={FilePlus2} size="sm" />}
+                      href="/intake"
+                    />
+                  </HStack>
+
+                  <MetadataList columns={3} orientation="horizontal">
+                    <MetadataListItem label="Sentinel regions">6 active corridors</MetadataListItem>
+                    <MetadataListItem label="Spatial check">5 km vector radius</MetadataListItem>
+                    <MetadataListItem label="Telemetry sync">30s feed cadence</MetadataListItem>
+                  </MetadataList>
+                </VStack>
+
+                <Card padding={5} data-ui="live-surveillance-preview">
+                  <VStack gap={4}>
+                    <HStack justify="between" align="center" gap={3} wrap="wrap">
+                      <HStack gap={2} align="center">
+                        <StatusDot variant="success" label="Live surveillance preview" isPulsing />
+                        <Heading level={2}>Live Corridor Snapshot</Heading>
+                      </HStack>
+                      <SegmentedControl
+                        label="Preview dataset"
+                        size="sm"
+                        value={previewTab}
+                        onChange={(v) => setPreviewTab(v as "corridors" | "cases")}
+                      >
+                        <SegmentedControlItem value="corridors" label="Corridors" />
+                        <SegmentedControlItem value="cases" label="Recent cases" />
+                      </SegmentedControl>
+                    </HStack>
+
+                    {previewTab === "corridors" ? (
+                      <Table density="compact" dividers="rows" hasHover>
+                        <TableHeader>
+                          <TableRow>
+                            <TableHeaderCell>Corridor</TableHeaderCell>
+                            <TableHeaderCell>Cases</TableHeaderCell>
+                            <TableHeaderCell>Trap sites</TableHeaderCell>
+                            <TableHeaderCell>Incidence / 100k</TableHeaderCell>
+                          </TableRow>
+                        </TableHeader>
+                        <TableBody>
+                          {corridorRows.map((row) => (
+                            <TableRow key={row.region}>
+                              <TableCell>
+                                <Link
+                                  href={`/map?region=${encodeURIComponent(row.region)}`}
+                                  isStandalone={false}
+                                >
+                                  <Text type="body" weight="medium">
+                                    {row.region}
+                                  </Text>
+                                </Link>
+                              </TableCell>
+                              <TableCell>
+                                <Text type="body" hasTabularNumbers weight="semibold">
+                                  {row.total}
+                                </Text>
+                              </TableCell>
+                              <TableCell>
+                                <Text type="body" hasTabularNumbers color="secondary">
+                                  {row.sites}
+                                </Text>
+                              </TableCell>
+                              <TableCell>
+                                <Token
+                                  size="sm"
+                                  color={row.rate >= 2 ? "red" : row.rate >= 1 ? "orange" : "teal"}
+                                  label={row.rate.toFixed(2)}
+                                />
+                              </TableCell>
+                            </TableRow>
+                          ))}
+                        </TableBody>
+                      </Table>
+                    ) : (
+                      <Table density="compact" dividers="rows" hasHover>
+                        <TableHeader>
+                          <TableRow>
+                            <TableHeaderCell>Case ID</TableHeaderCell>
+                            <TableHeaderCell>Region</TableHeaderCell>
+                            <TableHeaderCell>Syndrome</TableHeaderCell>
+                            <TableHeaderCell>Status</TableHeaderCell>
+                          </TableRow>
+                        </TableHeader>
+                        <TableBody>
+                          {recentCases.map((c) => (
+                            <TableRow key={c.id}>
+                              <TableCell>
+                                <Link
+                                  href={`/map?case=${encodeURIComponent(c.id)}`}
+                                  isStandalone={false}
+                                >
+                                  <Text type="code" weight="medium">
+                                    {c.id}
+                                  </Text>
+                                </Link>
+                              </TableCell>
+                              <TableCell>{c.region}</TableCell>
+                              <TableCell>{c.syndrome}</TableCell>
+                              <TableCell>
+                                <Token
+                                  size="sm"
+                                  color={
+                                    c.status === "Confirmed"
+                                      ? "red"
+                                      : c.status === "Suspected"
+                                        ? "orange"
+                                        : "blue"
+                                  }
+                                  label={c.status}
+                                />
+                              </TableCell>
+                            </TableRow>
+                          ))}
+                        </TableBody>
+                      </Table>
+                    )}
+                  </VStack>
+                </Card>
+              </Grid>
+            </VStack>
+          </Center>
+        </Section>
+
+        <Section variant="muted" padding={8} dividers={["top"]}>
+          <Center axis="horizontal" width="100%">
+            <VStack gap={5} maxWidth={1160} width="100%">
+              <VStack gap={1}>
+                <Heading level={2}>Operational Surveillance Modules</Heading>
+                <Text type="supporting">
+                  Direct entry points into regional analytics, cluster mapping, field intake, and
+                  pipeline observability.
+                </Text>
+              </VStack>
+
+              <Card padding={0}>
+                <Table density="balanced" dividers="rows" hasHover>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHeaderCell>Module</TableHeaderCell>
+                      <TableHeaderCell>Refresh cadence</TableHeaderCell>
+                      <TableHeaderCell>Operational contract</TableHeaderCell>
+                      <TableHeaderCell>Destination</TableHeaderCell>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {SUBSYSTEMS.map((sub) => (
+                      <TableRow key={sub.name}>
+                        <TableCell>
+                          <Text type="body" weight="semibold">
+                            {sub.name}
+                          </Text>
+                        </TableCell>
+                        <TableCell>
+                          <Text type="supporting" hasTabularNumbers>
+                            {sub.cadence}
+                          </Text>
+                        </TableCell>
+                        <TableCell>
+                          <Text type="body" color="secondary">
+                            {sub.contract}
+                          </Text>
+                        </TableCell>
+                        <TableCell>
+                          <Link href={sub.href} isStandalone={false}>
+                            {sub.cta}
+                          </Link>
+                        </TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              </Card>
+            </VStack>
+          </Center>
+        </Section>
+      </LayoutContent>
+
+      <LayoutFooter hasDivider>
+        <HStack
+          justify="between"
+          align="center"
+          gap={4}
+          wrap="wrap"
+          paddingInline={6}
+          paddingBlock={4}
+        >
+          <Text type="supporting" size="xsm">
+            VectorTrace · Hantavirus Epidemiological Surveillance
+          </Text>
+          <HStack gap={4}>
+            <Link href="/dashboard" isStandalone={false}>
+              Dashboard
             </Link>
-            <Link
-              to="/dashboard"
-              className="inline-flex items-center gap-2 px-5 h-10 rounded-md text-[13.5px] font-semibold bg-primary text-primary-foreground hover:bg-primary/90 transition-colors"
-            >
-              Go to dashboard <ArrowRight className="size-4" />
+            <Link href="/map" isStandalone={false}>
+              Geo Tracker
             </Link>
-          </div>
-        </div>
-      </section>
-
-      <footer className="border-t border-border">
-        <div className="max-w-5xl mx-auto px-4 sm:px-6 py-6 flex flex-wrap items-center justify-between gap-3 text-[11.5px] text-muted-foreground">
-          <span className="inline-flex items-center gap-1.5">
-            <Activity className="size-3.5 text-teal" /> VectorTrace — hantavirus surveillance
-          </span>
-          <span>React 19 · TanStack Start · Supabase · Cloudflare Workers</span>
-        </div>
-      </footer>
-    </div>
+            <Link href="/intake" isStandalone={false}>
+              Case Intake
+            </Link>
+          </HStack>
+        </HStack>
+      </LayoutFooter>
+    </Layout>
   );
 }
