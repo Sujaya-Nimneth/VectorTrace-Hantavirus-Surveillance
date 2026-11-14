@@ -6,6 +6,38 @@ describe("intakeSchema", () => {
     expect(intakeSchema.safeParse(DEFAULT_INTAKE_FORM).success).toBe(true);
   });
 
+  it("accepts non-hantavirus diseases with matching syndromes", () => {
+    expect(
+      intakeSchema.safeParse({
+        ...DEFAULT_INTAKE_FORM,
+        diseaseSlug: "dengue",
+        syndrome: "DENV-Severe",
+        symptoms: ["fever", "retro_orbital", "rash"],
+      }).success,
+    ).toBe(true);
+
+    expect(
+      intakeSchema.safeParse({
+        ...DEFAULT_INTAKE_FORM,
+        diseaseSlug: "mpox",
+        syndrome: "Clade-I",
+        symptoms: ["fever", "rash", "lymphadenopathy"],
+      }).success,
+    ).toBe(true);
+  });
+
+  it("rejects syndromes that do not belong to the chosen pathogen", () => {
+    const res = intakeSchema.safeParse({
+      ...DEFAULT_INTAKE_FORM,
+      diseaseSlug: "dengue",
+      syndrome: "HPS",
+    });
+    expect(res.success).toBe(false);
+    if (!res.success) {
+      expect(res.error.issues[0].path).toEqual(["syndrome"]);
+    }
+  });
+
   it("rejects out-of-range coordinates", () => {
     const res = intakeSchema.safeParse({ ...DEFAULT_INTAKE_FORM, lat: "123" });
     expect(res.success).toBe(false);

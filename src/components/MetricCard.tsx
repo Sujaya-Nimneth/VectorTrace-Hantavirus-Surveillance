@@ -19,6 +19,7 @@ export function MetricCard({
   tone,
   invertDelta = false,
   windowLabel = "vs prior 30d",
+  deltaLabel,
 }: {
   label: string;
   value: string;
@@ -27,6 +28,7 @@ export function MetricCard({
   tone: Tone;
   invertDelta?: boolean;
   windowLabel?: string;
+  deltaLabel?: string;
 }) {
   const isPositiveDelta = delta !== null && delta > 0;
   const isZeroDelta = delta === 0;
@@ -43,7 +45,7 @@ export function MetricCard({
             ? "error"
             : "success";
 
-  const deltaText = delta === null ? "New" : `${delta > 0 ? "+" : ""}${delta}% 30d`;
+  const deltaText = deltaLabel ?? (delta === null ? "New" : `${delta > 0 ? "+" : ""}${delta}% 30d`);
 
   return (
     <VStack gap={1.5} minHeight={84} justify="between">

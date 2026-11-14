@@ -1,17 +1,19 @@
 import { z } from "zod";
 import { REGIONS } from "@/lib/mock-data";
 import { SYMPTOMS } from "@/lib/intake-data";
+import { DISEASE_SLUGS, getDiseaseProfile, type DiseaseSlug } from "@/lib/diseases";
 
 const REGION_NAMES = REGIONS.map((r) => r.name) as [string, ...string[]];
 const SYMPTOM_KEYS = SYMPTOMS.map((s) => s.k) as [string, ...string[]];
 
 export type IntakeForm = {
+  diseaseSlug: DiseaseSlug;
   age: string;
   sex: "M" | "F" | "";
   region: string;
   lat: string;
   lng: string;
-  syndrome: "HPS" | "HFRS";
+  syndrome: string;
   status: "Pending" | "Suspected" | "Confirmed";
   symptoms: string[];
   onsetDate: string;
@@ -19,6 +21,7 @@ export type IntakeForm = {
 };
 
 export const DEFAULT_INTAKE_FORM: IntakeForm = {
+  diseaseSlug: "hantavirus",
   age: "",
   sex: "",
   region: REGIONS[0].name,
@@ -33,6 +36,9 @@ export const DEFAULT_INTAKE_FORM: IntakeForm = {
 
 export const intakeSchema = z
   .object({
+    diseaseSlug: z.enum(DISEASE_SLUGS, {
+      message: "Pathogen must be one of the active surveillance diseases",
+    }),
     age: z
       .string()
       .refine(
@@ -52,7 +58,7 @@ export const intakeSchema = z
       const n = Number(v);
       return Number.isFinite(n) && n >= -180 && n <= 180;
     }, "Longitude must be between -180 and 180"),
-    syndrome: z.enum(["HPS", "HFRS"]),
+    syndrome: z.string().min(1, "Clinical syndrome is required").max(64),
     status: z.enum(["Pending", "Suspected", "Confirmed"]),
     symptoms: z.array(z.enum(SYMPTOM_KEYS)).max(SYMPTOM_KEYS.length),
     onsetDate: z
@@ -70,6 +76,16 @@ export const intakeSchema = z
         code: "custom",
         path: ["lat"],
         message: "Latitude and longitude cannot both be zero",
+      });
+    }
+
+    const profile = getDiseaseProfile(value.diseaseSlug);
+    const validSyndromes = new Set(profile.syndromes.map((s) => s.code));
+    if (!validSyndromes.has(value.syndrome)) {
+      ctx.addIssue({
+        code: "custom",
+        path: ["syndrome"],
+        message: `Syndrome "${value.syndrome}" is not valid for ${profile.name}`,
       });
     }
   });

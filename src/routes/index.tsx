@@ -26,43 +26,54 @@ import {
   TableHeaderCell,
   TableRow,
 } from "@astryxdesign/core/Table";
-import { Activity, ArrowRight, FilePlus2, MapPin, Moon, Sun } from "lucide-react";
+import { Activity, ArrowRight, MapPin, Moon, Sun, TrendingUp } from "lucide-react";
 
 import { useCases, useRodents } from "@/hooks/use-surveillance";
+import { useAllDiseaseNowcasts } from "@/hooks/use-market-signals";
 import { useTheme } from "@/hooks/use-theme";
+import { getDiseaseProfile } from "@/lib/diseases";
 import { REGIONS } from "@/lib/mock-data";
 
 export const Route = createFileRoute("/")({
   component: LandingPage,
-  head: () => ({ meta: [{ title: "VectorTrace · Hantavirus Epidemiological Surveillance" }] }),
+  head: () => ({
+    meta: [{ title: "VectorTrace · Multi-Disease Surveillance & Outbreak Predictor" }],
+  }),
 });
 
 const SUBSYSTEMS = [
   {
     name: "Surveillance Overview",
     cadence: "30s poll",
-    contract: "30d / 90d epidemic curve & regional incidence / 100k",
+    contract: "30d / 90d multi-pathogen epidemic curves & regional incidence / 100k",
     href: "/dashboard",
     cta: "Open overview",
   },
   {
+    name: "Bio-Financial Outbreak Predictor",
+    cadence: "Daily sync",
+    contract: "Market-neutral pharma & diagnostics CAR, volume Z-scores & +7–21d lead-lag nowcasts",
+    href: "/predictions",
+    cta: "Open predictor",
+  },
+  {
     name: "Geospatial Proximity Tracker",
     cadence: "On focus",
-    contract: "5 km Haversine overlap against Sigmodontinae trap sites",
+    contract: "Adaptive 1.5–10 km Haversine overlap across 4 vector & wastewater sentinel types",
     href: "/map",
     cta: "Open map",
   },
   {
     name: "Rapid Case Intake",
     cadence: "Real-time",
-    contract: "4-step validated notification with browser draft recovery",
+    contract: "4-step multi-pathogen validated notification with draft recovery",
     href: "/intake",
     cta: "Submit case",
   },
   {
     name: "Infrastructure Diagnostics",
     cadence: "30s probe",
-    contract: "Cron cadence, 220ms DB latency SLO & system feed logs",
+    contract: "Cron cadence, 220ms DB latency SLO & Yahoo Finance / Wikimedia / WHO probes",
     href: "/admin",
     cta: "Inspect ops",
   },
@@ -72,7 +83,16 @@ function LandingPage() {
   const { theme, toggle } = useTheme();
   const { data: cases = [] } = useCases();
   const { data: rodents = [] } = useRodents();
-  const [previewTab, setPreviewTab] = useState<"corridors" | "cases">("corridors");
+  const { data: nowcasts } = useAllDiseaseNowcasts();
+  const [previewTab, setPreviewTab] = useState<"corridors" | "forecast" | "cases">("corridors");
+
+  const forecastRows = useMemo(
+    () =>
+      [...nowcasts]
+        .sort((a, b) => b.nowcast.compositeOutbreakRisk - a.nowcast.compositeOutbreakRisk)
+        .slice(0, 6),
+    [nowcasts],
+  );
 
   const corridorRows = useMemo(() => {
     return REGIONS.map((region) => {
@@ -108,6 +128,7 @@ function LandingPage() {
         startContent={
           <HStack gap={1} align="center">
             <TopNavItem label="Dashboard" href="/dashboard" />
+            <TopNavItem label="Outbreak Predictor" href="/predictions" />
             <TopNavItem label="Geo Tracker" href="/map" />
             <TopNavItem label="Case Intake" href="/intake" />
           </HStack>
@@ -139,9 +160,9 @@ function LandingPage() {
                   </Heading>
 
                   <Text type="large" color="secondary">
-                    Monitor six Southern Cone health corridors in real time — pairing human syndrome
-                    notifications with Sigmodontinae reservoir trapping data inside 5 km proximity
-                    radii.
+                    Monitor six epidemiologically distinct pathogens across Southern Cone sentinel
+                    corridors — fusing human clinical intake, adaptive vector radii, and
+                    market-neutral pharmaceutical alpha nowcasts.
                   </Text>
 
                   <HStack gap={3} align="center" wrap="wrap">
@@ -153,25 +174,29 @@ function LandingPage() {
                       href="/dashboard"
                     />
                     <Button
-                      label="Explore cluster map"
+                      label="Outbreak predictor"
                       variant="secondary"
+                      size="lg"
+                      icon={<Icon icon={TrendingUp} size="sm" />}
+                      href="/predictions"
+                    />
+                    <Button
+                      label="Explore map"
+                      variant="ghost"
                       size="lg"
                       icon={<Icon icon={MapPin} size="sm" />}
                       href="/map"
                     />
-                    <Button
-                      label="Submit case"
-                      variant="ghost"
-                      size="lg"
-                      icon={<Icon icon={FilePlus2} size="sm" />}
-                      href="/intake"
-                    />
                   </HStack>
 
                   <MetadataList columns={3} orientation="horizontal">
-                    <MetadataListItem label="Sentinel regions">6 active corridors</MetadataListItem>
-                    <MetadataListItem label="Spatial check">5 km vector radius</MetadataListItem>
-                    <MetadataListItem label="Telemetry sync">30s feed cadence</MetadataListItem>
+                    <MetadataListItem label="Monitored pathogens">
+                      6 active diseases
+                    </MetadataListItem>
+                    <MetadataListItem label="Spatial check">
+                      1.5–10 km vector radii
+                    </MetadataListItem>
+                    <MetadataListItem label="Market nowcast">17 equity tickers</MetadataListItem>
                   </MetadataList>
                 </VStack>
 
@@ -186,9 +211,10 @@ function LandingPage() {
                         label="Preview dataset"
                         size="sm"
                         value={previewTab}
-                        onChange={(v) => setPreviewTab(v as "corridors" | "cases")}
+                        onChange={(v) => setPreviewTab(v as "corridors" | "forecast" | "cases")}
                       >
                         <SegmentedControlItem value="corridors" label="Corridors" />
+                        <SegmentedControlItem value="forecast" label="Risk forecast" />
                         <SegmentedControlItem value="cases" label="Recent cases" />
                       </SegmentedControl>
                     </HStack>
@@ -199,7 +225,7 @@ function LandingPage() {
                           <TableRow>
                             <TableHeaderCell>Corridor</TableHeaderCell>
                             <TableHeaderCell>Cases</TableHeaderCell>
-                            <TableHeaderCell>Trap sites</TableHeaderCell>
+                            <TableHeaderCell>Sentinel sites</TableHeaderCell>
                             <TableHeaderCell>Incidence / 100k</TableHeaderCell>
                           </TableRow>
                         </TableHeader>
@@ -237,46 +263,100 @@ function LandingPage() {
                           ))}
                         </TableBody>
                       </Table>
+                    ) : previewTab === "forecast" ? (
+                      <Table density="compact" dividers="rows" hasHover>
+                        <TableHeader>
+                          <TableRow>
+                            <TableHeaderCell>Pathogen</TableHeaderCell>
+                            <TableHeaderCell>7d Pharma alpha</TableHeaderCell>
+                            <TableHeaderCell>Lead</TableHeaderCell>
+                            <TableHeaderCell>Risk score</TableHeaderCell>
+                          </TableRow>
+                        </TableHeader>
+                        <TableBody>
+                          {forecastRows.map(({ disease: d, nowcast }) => (
+                            <TableRow key={d.slug}>
+                              <TableCell>
+                                <Link
+                                  href={`/predictions?disease=${encodeURIComponent(d.slug)}`}
+                                  isStandalone={false}
+                                >
+                                  <Text type="body" weight="medium">
+                                    {d.shortName}
+                                  </Text>
+                                </Link>
+                              </TableCell>
+                              <TableCell>
+                                <Text type="body" hasTabularNumbers weight="semibold">
+                                  {nowcast.latestCar7d >= 0 ? "+" : ""}
+                                  {(nowcast.latestCar7d * 100).toFixed(1)}%
+                                </Text>
+                              </TableCell>
+                              <TableCell>
+                                <Text type="body" hasTabularNumbers color="secondary">
+                                  +{nowcast.optimalLeadDays}d
+                                </Text>
+                              </TableCell>
+                              <TableCell>
+                                <Token
+                                  size="sm"
+                                  color={
+                                    nowcast.compositeOutbreakRisk >= 70
+                                      ? "red"
+                                      : nowcast.compositeOutbreakRisk >= 45
+                                        ? "orange"
+                                        : "teal"
+                                  }
+                                  label={`${nowcast.compositeOutbreakRisk.toFixed(0)}/100`}
+                                />
+                              </TableCell>
+                            </TableRow>
+                          ))}
+                        </TableBody>
+                      </Table>
                     ) : (
                       <Table density="compact" dividers="rows" hasHover>
                         <TableHeader>
                           <TableRow>
                             <TableHeaderCell>Case ID</TableHeaderCell>
+                            <TableHeaderCell>Pathogen</TableHeaderCell>
                             <TableHeaderCell>Region</TableHeaderCell>
-                            <TableHeaderCell>Syndrome</TableHeaderCell>
                             <TableHeaderCell>Status</TableHeaderCell>
                           </TableRow>
                         </TableHeader>
                         <TableBody>
-                          {recentCases.map((c) => (
-                            <TableRow key={c.id}>
-                              <TableCell>
-                                <Link
-                                  href={`/map?case=${encodeURIComponent(c.id)}`}
-                                  isStandalone={false}
-                                >
-                                  <Text type="code" weight="medium">
-                                    {c.id}
-                                  </Text>
-                                </Link>
-                              </TableCell>
-                              <TableCell>{c.region}</TableCell>
-                              <TableCell>{c.syndrome}</TableCell>
-                              <TableCell>
-                                <Token
-                                  size="sm"
-                                  color={
-                                    c.status === "Confirmed"
-                                      ? "red"
-                                      : c.status === "Suspected"
-                                        ? "orange"
-                                        : "blue"
-                                  }
-                                  label={c.status}
-                                />
-                              </TableCell>
-                            </TableRow>
-                          ))}
+                          {recentCases.map((c) => {
+                            const profile = getDiseaseProfile(c.diseaseSlug);
+                            return (
+                              <TableRow key={c.id}>
+                                <TableCell>
+                                  <Link
+                                    href={`/map?case=${encodeURIComponent(c.id)}`}
+                                    isStandalone={false}
+                                  >
+                                    <Text type="code" weight="medium">
+                                      {c.id}
+                                    </Text>
+                                  </Link>
+                                </TableCell>
+                                <TableCell>{profile.shortName}</TableCell>
+                                <TableCell>{c.region}</TableCell>
+                                <TableCell>
+                                  <Token
+                                    size="sm"
+                                    color={
+                                      c.status === "Confirmed"
+                                        ? "red"
+                                        : c.status === "Suspected"
+                                          ? "orange"
+                                          : "blue"
+                                    }
+                                    label={c.status}
+                                  />
+                                </TableCell>
+                              </TableRow>
+                            );
+                          })}
                         </TableBody>
                       </Table>
                     )}
@@ -350,10 +430,15 @@ function LandingPage() {
           paddingInline={6}
           paddingBlock={4}
         >
-          <Text type="supporting">VectorTrace · Hantavirus Epidemiological Surveillance</Text>
+          <Text type="supporting">
+            VectorTrace · Multi-Disease Epidemiological Surveillance &amp; Outbreak Predictor
+          </Text>
           <HStack gap={4}>
             <Link href="/dashboard" isStandalone={false}>
               Dashboard
+            </Link>
+            <Link href="/predictions" isStandalone={false}>
+              Outbreak Predictor
             </Link>
             <Link href="/map" isStandalone={false}>
               Geo Tracker

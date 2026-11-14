@@ -3,7 +3,7 @@ import { SideNav, SideNavItem, SideNavSection } from "@astryxdesign/core/SideNav
 import { HStack } from "@astryxdesign/core/HStack";
 import { StatusDot } from "@astryxdesign/core/StatusDot";
 import { Text } from "@astryxdesign/core/Text";
-import { Activity, FilePlus2, MapPin, Server } from "lucide-react";
+import { Activity, FilePlus2, MapPin, Server, TrendingUp } from "lucide-react";
 import { useRoles } from "@/hooks/use-roles";
 
 export function Sidebar() {
@@ -17,7 +17,7 @@ export function Sidebar() {
       footer={
         <HStack gap={2} align="center" paddingInline={2} paddingBlock={1}>
           <StatusDot variant="success" label="Surveillance feed active" isPulsing />
-          <Text type="supporting">WHO DON · Field Ops</Text>
+          <Text type="supporting">Multi-Pathogen · Bio-Signals</Text>
         </HStack>
       }
     >
@@ -27,6 +27,12 @@ export function Sidebar() {
           icon={Activity}
           href="/dashboard"
           isSelected={pathname === "/dashboard"}
+        />
+        <SideNavItem
+          label="Outbreak Predictor"
+          icon={TrendingUp}
+          href="/predictions"
+          isSelected={pathname === "/predictions"}
         />
         <SideNavItem
           label="Geo Tracker"

@@ -7,12 +7,15 @@ import { EmptyState } from "@astryxdesign/core/EmptyState";
 import { Skeleton } from "@astryxdesign/core/Skeleton";
 import { VStack } from "@astryxdesign/core/VStack";
 import { useAlerts } from "@/hooks/use-surveillance";
+import { useDiseaseFilter } from "@/hooks/use-disease-filter";
+import { getDiseaseProfile } from "@/lib/diseases";
 import { QueryError } from "./QueryError";
 
 type Level = "critical" | "warning" | "info";
 
 export function AlertsFeed() {
-  const { data: alerts, loading, error, refetch } = useAlerts();
+  const { disease } = useDiseaseFilter();
+  const { data: alerts, loading, error, refetch } = useAlerts(disease);
   const [levelFilter, setLevelFilter] = useState<"all" | Level>("all");
 
   const visible = useMemo(
@@ -64,6 +67,20 @@ export function AlertsFeed() {
                 : alert.level === "warning"
                   ? "warning"
                   : "accent";
+            const profile = getDiseaseProfile(alert.diseaseSlug);
+            const sourceLabel =
+              alert.signalSource === "market_divergence"
+                ? "Market Signal"
+                : alert.signalSource === "who_don"
+                  ? "WHO DON"
+                  : alert.signalSource === "composite_nowcast"
+                    ? "Nowcast"
+                    : "Field Sentinel";
+            const href =
+              alert.signalSource === "market_divergence" ||
+              alert.signalSource === "composite_nowcast"
+                ? `/predictions?disease=${profile.slug}`
+                : `/map?region=${encodeURIComponent(alert.region)}`;
             return (
               <ListItem
                 key={alert.id}
@@ -76,9 +93,9 @@ export function AlertsFeed() {
                   />
                 }
                 label={alert.title}
-                description={alert.region}
+                description={`${profile.shortName} · ${alert.region} · ${sourceLabel}`}
                 endContent={<Timestamp value={alert.createdAt} format="relative_short" isLive />}
-                href={`/map?region=${encodeURIComponent(alert.region)}`}
+                href={href}
               />
             );
           })}

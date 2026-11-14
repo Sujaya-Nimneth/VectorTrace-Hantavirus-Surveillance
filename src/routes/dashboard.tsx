@@ -9,9 +9,10 @@ import { Heading } from "@astryxdesign/core/Heading";
 import { Text } from "@astryxdesign/core/Text";
 import { Button } from "@astryxdesign/core/Button";
 import { Icon } from "@astryxdesign/core/Icon";
+import { Banner } from "@astryxdesign/core/Banner";
 import { SegmentedControl, SegmentedControlItem } from "@astryxdesign/core/SegmentedControl";
 import { Skeleton } from "@astryxdesign/core/Skeleton";
-import { FilePlus2, MapPin } from "lucide-react";
+import { FilePlus2, MapPin, TrendingUp } from "lucide-react";
 
 import { MetricCard } from "@/components/MetricCard";
 import { EpidemicCurve } from "@/components/EpidemicCurve";
@@ -19,6 +20,9 @@ import { AlertsFeed } from "@/components/AlertsFeed";
 import { RiskTable } from "@/components/RiskTable";
 import { QueryError } from "@/components/QueryError";
 import { useCases, useRodents } from "@/hooks/use-surveillance";
+import { useDiseaseFilter } from "@/hooks/use-disease-filter";
+import { useAllDiseaseNowcasts } from "@/hooks/use-market-signals";
+import { getDiseaseProfile } from "@/lib/diseases";
 import { useNow } from "@/hooks/use-now";
 import { DAY_MS } from "@/lib/time";
 
@@ -32,19 +36,35 @@ const CURVE_RANGES: Array<{ days: 7 | 30 | 90; label: string }> = [
 
 function DashboardPage() {
   const [curveRange, setCurveRange] = useState<7 | 30 | 90>(90);
+  const [curveGroupBy, setCurveGroupBy] = useState<"pathogen" | "region">("pathogen");
+  const { disease } = useDiseaseFilter();
   const {
     data: cases = [],
     loading: casesLoading,
     error: casesError,
     refetch: refetchCases,
-  } = useCases();
+  } = useCases(disease);
   const {
     data: rodents = [],
     loading: rodentsLoading,
     error: rodentsError,
     refetch: refetchRodents,
-  } = useRodents();
+  } = useRodents(disease);
+  const { data: allNowcasts } = useAllDiseaseNowcasts();
   const now = useNow();
+
+  const activeProfile = disease === "all" ? null : getDiseaseProfile(disease);
+  const effectiveGroupBy = disease === "all" ? curveGroupBy : "region";
+
+  const topForecast = useMemo(() => {
+    if (allNowcasts.length === 0) return null;
+    if (disease !== "all") {
+      return allNowcasts.find((n) => n.disease.slug === disease) ?? allNowcasts[0];
+    }
+    return [...allNowcasts].sort(
+      (a, b) => b.nowcast.compositeOutbreakRisk - a.nowcast.compositeOutbreakRisk,
+    )[0];
+  }, [allNowcasts, disease]);
 
   const metrics = useMemo(() => {
     const inWindow = (iso: string, minDays: number, maxDays: number) => {
@@ -97,10 +117,10 @@ function DashboardPage() {
         delta: delta(last30Pending.length, prior30Pending.length),
       },
       leadFinding: topRegion
-        ? `${topRegion[0]} accounts for ${topRegion[1]} of ${last30Cases.length} reported notifications in the last 30 days.`
-        : "Monitoring 6 regional sentinel nodes across active hantavirus corridors.",
+        ? `${topRegion[0]} accounts for ${topRegion[1]} of ${last30Cases.length} ${activeProfile ? `${activeProfile.shortName} ` : ""}notifications in the last 30 days.`
+        : `Monitoring 6 regional corridors across ${activeProfile ? activeProfile.name : "multi-pathogen sentinel and bio-financial"} feeds.`,
     };
-  }, [cases, rodents, now]);
+  }, [cases, rodents, now, activeProfile]);
 
   const loading = casesLoading || rodentsLoading;
   const queryError = casesError || rodentsError;
@@ -110,10 +130,19 @@ function DashboardPage() {
       <LayoutHeader hasDivider>
         <HStack justify="between" align="end" gap={4} wrap="wrap" paddingBlockEnd={4}>
           <VStack gap={1}>
-            <Heading level={1}>Surveillance Overview</Heading>
+            <Heading level={1}>
+              {activeProfile ? `${activeProfile.name} Surveillance` : "Surveillance Overview"}
+            </Heading>
             <Text type="supporting">{metrics.leadFinding}</Text>
           </VStack>
-          <HStack gap={2} align="center">
+          <HStack gap={2} align="center" wrap="wrap">
+            <Button
+              label="Outbreak predictor"
+              variant="secondary"
+              size="md"
+              icon={<Icon icon={TrendingUp} size="sm" />}
+              href={disease === "all" ? "/predictions" : `/predictions?disease=${disease}`}
+            />
             <Button
               label="Open map"
               variant="secondary"
@@ -145,6 +174,23 @@ function DashboardPage() {
             />
           )}
 
+          {topForecast && topForecast.nowcast.compositeOutbreakRisk >= 60 && (
+            <Banner
+              status={topForecast.nowcast.compositeOutbreakRisk >= 75 ? "error" : "warning"}
+              title={`${topForecast.disease.name}: ${topForecast.nowcast.compositeOutbreakRisk.toFixed(0)}/100 composite bio-financial risk (${topForecast.nowcast.riskTier})`}
+              description={`Leading ${topForecast.disease.shortName} basket (${topForecast.leadTickers.join(", ")}) shows ${topForecast.nowcast.latestCar7d * 100 >= 0 ? "+" : ""}${(topForecast.nowcast.latestCar7d * 100).toFixed(1)}% 7-day abnormal alpha at +${topForecast.nowcast.optimalLeadDays}d lead window.`}
+              endContent={
+                <Button
+                  label="Inspect predictor"
+                  variant="secondary"
+                  size="sm"
+                  icon={<Icon icon={TrendingUp} size="sm" />}
+                  href={`/predictions?disease=${topForecast.disease.slug}`}
+                />
+              }
+            />
+          )}
+
           <Card padding={5}>
             {loading ? (
               <Grid columns={{ minWidth: 180, max: 4, repeat: "fit" }} gap={5}>
@@ -161,7 +207,7 @@ function DashboardPage() {
                   tone="alert"
                 />
                 <MetricCard
-                  label="Rodent trap sites"
+                  label={activeProfile ? activeProfile.sentinelLabel : "Active sentinel sites"}
                   value={String(metrics.rodents.value)}
                   delta={metrics.rodents.delta}
                   tone="warning"
@@ -190,21 +236,36 @@ function DashboardPage() {
                   <VStack gap={0.5}>
                     <Heading level={2}>Epidemic Curve</Heading>
                     <Text type="supporting">
-                      Case onset counts by region (straight linear segments)
+                      {effectiveGroupBy === "pathogen"
+                        ? "Case onset trajectory grouped by monitored pathogen"
+                        : `Case onset counts by corridor${activeProfile ? ` · ${activeProfile.shortName}` : ""}`}
                     </Text>
                   </VStack>
-                  <SegmentedControl
-                    label="Epidemic curve window"
-                    size="sm"
-                    value={String(curveRange)}
-                    onChange={(val) => setCurveRange(Number(val) as 7 | 30 | 90)}
-                  >
-                    {CURVE_RANGES.map((r) => (
-                      <SegmentedControlItem key={r.days} value={String(r.days)} label={r.label} />
-                    ))}
-                  </SegmentedControl>
+                  <HStack gap={2} align="center" wrap="wrap">
+                    {disease === "all" && (
+                      <SegmentedControl
+                        label="Curve series grouping"
+                        size="sm"
+                        value={curveGroupBy}
+                        onChange={(val) => setCurveGroupBy(val as "pathogen" | "region")}
+                      >
+                        <SegmentedControlItem value="pathogen" label="Pathogen" />
+                        <SegmentedControlItem value="region" label="Region" />
+                      </SegmentedControl>
+                    )}
+                    <SegmentedControl
+                      label="Epidemic curve window"
+                      size="sm"
+                      value={String(curveRange)}
+                      onChange={(val) => setCurveRange(Number(val) as 7 | 30 | 90)}
+                    >
+                      {CURVE_RANGES.map((r) => (
+                        <SegmentedControlItem key={r.days} value={String(r.days)} label={r.label} />
+                      ))}
+                    </SegmentedControl>
+                  </HStack>
                 </HStack>
-                <EpidemicCurve days={curveRange} />
+                <EpidemicCurve days={curveRange} groupBy={effectiveGroupBy} />
               </VStack>
             </Card>
 

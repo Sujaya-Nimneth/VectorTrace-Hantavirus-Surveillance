@@ -8,26 +8,140 @@ export type Database = {
   };
   public: {
     Tables: {
+      disease_nowcast_signals: {
+        Row: {
+          climate_suitability_score: number;
+          composite_outbreak_risk: number;
+          created_at: string;
+          disease_slug: string;
+          forecast_cases_14d: number;
+          forecast_cases_7d: number;
+          lag_correlation_r: number;
+          optimal_lead_days: number;
+          pharma_basket_zscore: number;
+          region: string;
+          signal_date: string;
+          wiki_attention_zscore: number;
+        };
+        Insert: {
+          climate_suitability_score?: number;
+          composite_outbreak_risk?: number;
+          created_at?: string;
+          disease_slug: string;
+          forecast_cases_14d?: number;
+          forecast_cases_7d?: number;
+          lag_correlation_r?: number;
+          optimal_lead_days?: number;
+          pharma_basket_zscore?: number;
+          region: string;
+          signal_date: string;
+          wiki_attention_zscore?: number;
+        };
+        Update: {
+          climate_suitability_score?: number;
+          composite_outbreak_risk?: number;
+          created_at?: string;
+          disease_slug?: string;
+          forecast_cases_14d?: number;
+          forecast_cases_7d?: number;
+          lag_correlation_r?: number;
+          optimal_lead_days?: number;
+          pharma_basket_zscore?: number;
+          region?: string;
+          signal_date?: string;
+          wiki_attention_zscore?: number;
+        };
+        Relationships: [];
+      };
+      disease_ticker_mappings: {
+        Row: {
+          disease_slug: string;
+          lead_role: string;
+          rationale: string;
+          ticker: string;
+          weight: number;
+        };
+        Insert: {
+          disease_slug: string;
+          lead_role: string;
+          rationale: string;
+          ticker: string;
+          weight: number;
+        };
+        Update: {
+          disease_slug?: string;
+          lead_role?: string;
+          rationale?: string;
+          ticker?: string;
+          weight?: number;
+        };
+        Relationships: [];
+      };
+      diseases: {
+        Row: {
+          category: string;
+          created_at: string;
+          icd11_code: string;
+          incubation_days_max: number;
+          name: string;
+          proximity_radius_km: number;
+          sentinel_type: string;
+          slug: string;
+          symptoms: string[];
+          syndromes: string[];
+        };
+        Insert: {
+          category: string;
+          created_at?: string;
+          icd11_code: string;
+          incubation_days_max?: number;
+          name: string;
+          proximity_radius_km?: number;
+          sentinel_type: string;
+          slug: string;
+          symptoms: string[];
+          syndromes: string[];
+        };
+        Update: {
+          category?: string;
+          created_at?: string;
+          icd11_code?: string;
+          incubation_days_max?: number;
+          name?: string;
+          proximity_radius_km?: number;
+          sentinel_type?: string;
+          slug?: string;
+          symptoms?: string[];
+          syndromes?: string[];
+        };
+        Relationships: [];
+      };
       hanta_alerts: {
         Row: {
           created_at: string;
+          disease_slug: string;
           id: string;
           level: Database["public"]["Enums"]["alert_level"];
           region: string;
+          signal_source: string;
           title: string;
         };
         Insert: {
           created_at?: string;
+          disease_slug?: string;
           id?: string;
           level?: Database["public"]["Enums"]["alert_level"];
           region: string;
+          signal_source?: string;
           title: string;
         };
         Update: {
           created_at?: string;
+          disease_slug?: string;
           id?: string;
           level?: Database["public"]["Enums"]["alert_level"];
           region?: string;
+          signal_source?: string;
           title?: string;
         };
         Relationships: [];
@@ -36,13 +150,14 @@ export type Database = {
         Row: {
           case_id: string;
           created_at: string;
+          disease_slug: string;
           id: string;
           lat: number | null;
           lng: number | null;
           region: string;
           reported_at: string;
           status: Database["public"]["Enums"]["case_status"];
-          syndrome: Database["public"]["Enums"]["case_syndrome"];
+          syndrome: string;
         };
         Insert: never;
         Update: never;
@@ -53,6 +168,7 @@ export type Database = {
           age: number | null;
           case_id: string;
           created_at: string;
+          disease_slug: string;
           exposure: string | null;
           id: string;
           lat: number | null;
@@ -61,13 +177,14 @@ export type Database = {
           reported_at: string;
           sex: Database["public"]["Enums"]["case_sex"] | null;
           status: Database["public"]["Enums"]["case_status"];
-          syndrome: Database["public"]["Enums"]["case_syndrome"];
+          syndrome: string;
           symptoms: string[];
         };
         Insert: {
           age?: number | null;
           case_id: string;
           created_at?: string;
+          disease_slug?: string;
           exposure?: string | null;
           id?: string;
           lat?: number | null;
@@ -76,13 +193,14 @@ export type Database = {
           reported_at?: string;
           sex?: Database["public"]["Enums"]["case_sex"] | null;
           status?: Database["public"]["Enums"]["case_status"];
-          syndrome?: Database["public"]["Enums"]["case_syndrome"];
+          syndrome?: string;
           symptoms?: string[];
         };
         Update: {
           age?: number | null;
           case_id?: string;
           created_at?: string;
+          disease_slug?: string;
           exposure?: string | null;
           id?: string;
           lat?: number | null;
@@ -91,7 +209,7 @@ export type Database = {
           reported_at?: string;
           sex?: Database["public"]["Enums"]["case_sex"] | null;
           status?: Database["public"]["Enums"]["case_status"];
-          syndrome?: Database["public"]["Enums"]["case_syndrome"];
+          syndrome?: string;
           symptoms?: string[];
         };
         Relationships: [];
@@ -201,37 +319,106 @@ export type Database = {
         };
         Relationships: [];
       };
+      market_daily_bars: {
+        Row: {
+          abnormal_return_1d: number;
+          car_7d: number;
+          close_price: number;
+          created_at: string;
+          return_1d: number;
+          ticker: string;
+          trade_date: string;
+          volume: number;
+          volume_zscore: number;
+        };
+        Insert: {
+          abnormal_return_1d?: number;
+          car_7d?: number;
+          close_price: number;
+          created_at?: string;
+          return_1d?: number;
+          ticker: string;
+          trade_date: string;
+          volume: number;
+          volume_zscore?: number;
+        };
+        Update: {
+          abnormal_return_1d?: number;
+          car_7d?: number;
+          close_price?: number;
+          created_at?: string;
+          return_1d?: number;
+          ticker?: string;
+          trade_date?: string;
+          volume?: number;
+          volume_zscore?: number;
+        };
+        Relationships: [];
+      };
+      pharma_tickers: {
+        Row: {
+          company_name: string;
+          created_at: string;
+          exchange: string;
+          is_pure_play: boolean;
+          sector_role: string;
+          ticker: string;
+        };
+        Insert: {
+          company_name: string;
+          created_at?: string;
+          exchange: string;
+          is_pure_play?: boolean;
+          sector_role: string;
+          ticker: string;
+        };
+        Update: {
+          company_name?: string;
+          created_at?: string;
+          exchange?: string;
+          is_pure_play?: boolean;
+          sector_role?: string;
+          ticker?: string;
+        };
+        Relationships: [];
+      };
       rodent_sites: {
         Row: {
           created_at: string;
+          disease_slug: string;
           id: string;
           lat: number;
           lng: number;
           positivity: number;
           region: string;
           sampled_at: string;
+          sentinel_type: string;
           site_id: string;
           species: string;
         };
         Insert: {
           created_at?: string;
+          disease_slug?: string;
           id?: string;
           lat: number;
           lng: number;
           positivity?: number;
           region: string;
           sampled_at?: string;
+          sentinel_type?: string;
           site_id: string;
           species: string;
         };
         Update: {
           created_at?: string;
+          disease_slug?: string;
           id?: string;
           lat?: number;
           lng?: number;
           positivity?: number;
           region?: string;
           sampled_at?: string;
+          sentinel_type?: string;
           site_id?: string;
           species?: string;
         };
@@ -276,7 +463,6 @@ export type Database = {
       app_role: "admin" | "epidemiologist" | "viewer";
       case_sex: "M" | "F";
       case_status: "Confirmed" | "Suspected" | "Pending";
-      case_syndrome: "HPS" | "HFRS";
       infra_status: "ok" | "warn" | "down";
       ingest_status: "success" | "failed";
     };
@@ -404,7 +590,6 @@ export const Constants = {
       app_role: ["admin", "epidemiologist", "viewer"],
       case_sex: ["M", "F"],
       case_status: ["Confirmed", "Suspected", "Pending"],
-      case_syndrome: ["HPS", "HFRS"],
       infra_status: ["ok", "warn", "down"],
       ingest_status: ["success", "failed"],
     },

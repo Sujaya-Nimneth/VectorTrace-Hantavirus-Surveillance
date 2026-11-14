@@ -1,19 +1,10 @@
 /**
  * Supabase Edge Function: ingest-don-feed
  * --------------------------------------
- * Pulls WHO Disease Outbreak News (DONs) using Firecrawl and writes
- * normalized rows into `hanta_cases` and `hanta_alerts` (upsert on case_id),
- * logging each run to `infra_ingest_runs`.
- *
- * Expected tables (see supabase/migrations): public.hanta_cases, public.hanta_alerts,
- * public.infra_ingest_runs — all with RLS enabled.
- *
- * Required secrets (set via Supabase Dashboard):
- *   FIRECRAWL_API_KEY           – Firecrawl bearer token
- *   SUPABASE_URL / SUPABASE_SERVICE_ROLE_KEY – auto-injected
- *
- * Bearer tokens are stored in Supabase Vault. The endpoint verifies callers
- * through the service-role-only verify_function_token RPC and fails CLOSED.
+ * Pulls WHO Disease Outbreak News (DONs) using Firecrawl, classifies items
+ * across VectorTrace's active surveillance pathogens, and writes normalized
+ * rows into `hanta_cases` and `hanta_alerts` (upsert on case_id), logging
+ * each run to `infra_ingest_runs`.
  */
 
 // deno-lint-ignore-file
@@ -22,8 +13,67 @@ import { geocodeRegion, isPlottableCoordinates } from "../_shared/geocoding.ts";
 
 const FIRECRAWL_SCRAPE_ENDPOINT = "https://api.firecrawl.dev/v2/scrape";
 const SOURCE_URL = "https://www.who.int/emergencies/disease-outbreak-news";
-
 const INGEST_SOURCE = "WHO Disease Outbreak News";
+
+type DiseaseSlug = "hantavirus" | "dengue" | "h5n1" | "mpox" | "arbovirus" | "cholera";
+
+const DISEASE_MATCHERS: Array<{
+  slug: DiseaseSlug;
+  prefix: string;
+  defaultSyndrome: string;
+  allowedSyndromes: string[];
+  keywords: string[];
+}> = [
+  {
+    slug: "hantavirus",
+    prefix: "HTV",
+    defaultSyndrome: "HPS",
+    allowedSyndromes: ["HPS", "HFRS"],
+    keywords: [
+      "hantavirus",
+      "hanta",
+      "hps",
+      "hfrs",
+      "hemorrhagic fever with renal syndrome",
+      "hantavirus pulmonary syndrome",
+    ],
+  },
+  {
+    slug: "dengue",
+    prefix: "DNV",
+    defaultSyndrome: "DENV-Classic",
+    allowedSyndromes: ["DENV-Classic", "DENV-Severe"],
+    keywords: ["dengue", "denv", "dengue fever", "severe dengue"],
+  },
+  {
+    slug: "h5n1",
+    prefix: "H5N",
+    defaultSyndrome: "H5N1-Avian",
+    allowedSyndromes: ["H5N1-Avian", "H5N1-Mammalian"],
+    keywords: ["h5n1", "avian influenza", "bird flu", "influenza a(h5"],
+  },
+  {
+    slug: "mpox",
+    prefix: "MPX",
+    defaultSyndrome: "Clade-I",
+    allowedSyndromes: ["Clade-I", "Clade-II"],
+    keywords: ["mpox", "monkeypox", "clade i", "clade ii", "orthopox"],
+  },
+  {
+    slug: "arbovirus",
+    prefix: "ARV",
+    defaultSyndrome: "CHIKV",
+    allowedSyndromes: ["CHIKV", "ZIKV"],
+    keywords: ["chikungunya", "chikv", "zika", "zikv"],
+  },
+  {
+    slug: "cholera",
+    prefix: "CHL",
+    defaultSyndrome: "El-Tor",
+    allowedSyndromes: ["El-Tor", "Classical"],
+    keywords: ["cholera", "vibrio cholerae", "el tor"],
+  },
+];
 
 async function authorize(req: Request): Promise<boolean> {
   const auth = req.headers.get("authorization") ?? "";
@@ -34,8 +84,6 @@ async function authorize(req: Request): Promise<boolean> {
   const supabaseKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
   if (!supabaseUrl || !supabaseKey) return false;
 
-  // Verify through the service-role-only RPC; the raw token lives in Vault,
-  // never in Edge Function secrets or public.infra_config.
   const verifier = createClient(supabaseUrl, supabaseKey);
   const { data, error } = await verifier.rpc("verify_function_token", {
     presented_token: presented,
@@ -50,40 +98,53 @@ async function authorize(req: Request): Promise<boolean> {
 type RawDonItem = {
   case_id?: string;
   external_id?: string;
+  disease_slug?: string;
   region?: string;
   lat?: number;
   lng?: number;
   reported_at?: string;
-  syndrome?: "HPS" | "HFRS";
+  syndrome?: string;
   status?: "Confirmed" | "Suspected" | "Pending";
   summary?: string;
 };
 
 type NormalizedCase = {
   case_id: string;
+  disease_slug: DiseaseSlug;
   region: string;
   lat: number;
   lng: number;
   reported_at: string;
-  syndrome: "HPS" | "HFRS";
+  syndrome: string;
   status: "Confirmed" | "Suspected" | "Pending";
 };
 
-/**
- * Deterministic fallback id (FNV-1a) so re-ingesting the same DON item
- * dedupes via the case_id unique constraint instead of inserting duplicates.
- */
-function stableCaseId(seed: string): string {
+function classifyDisease(it: RawDonItem) {
+  const explicit = (it.disease_slug ?? "").toLowerCase().trim();
+  const bySlug = DISEASE_MATCHERS.find((m) => m.slug === explicit);
+  if (bySlug) return bySlug;
+
+  const haystack = `${it.syndrome ?? ""} ${it.summary ?? ""} ${it.case_id ?? ""}`.toLowerCase();
+  for (const matcher of DISEASE_MATCHERS) {
+    if (matcher.keywords.some((kw) => haystack.includes(kw))) {
+      return matcher;
+    }
+  }
+  return null;
+}
+
+function stableCaseId(prefix: string, seed: string): string {
   let h = 0x811c9dc5;
   for (let i = 0; i < seed.length; i++) {
     h ^= seed.charCodeAt(i);
     h = Math.imul(h, 0x01000193);
   }
-  return `DON-${(h >>> 0).toString(36).toUpperCase().padStart(7, "0")}`;
+  return `DON-${prefix}-${(h >>> 0).toString(36).toUpperCase().padStart(7, "0")}`;
 }
 
 async function normalizeItem(
   it: RawDonItem,
+  matcher: (typeof DISEASE_MATCHERS)[number],
 ): Promise<{ ok: true; value: NormalizedCase } | { ok: false; reason: string }> {
   const region = typeof it.region === "string" && it.region.trim() ? it.region.trim() : "Unknown";
 
@@ -112,31 +173,31 @@ async function normalizeItem(
     reportedAtDefaulted = false;
   }
 
-  const syndrome = it.syndrome ?? "HPS";
+  const candidateSyn = typeof it.syndrome === "string" ? it.syndrome.trim() : "";
+  const syndrome = matcher.allowedSyndromes.includes(candidateSyn)
+    ? candidateSyn
+    : matcher.defaultSyndrome;
+
   const status = it.status ?? "Suspected";
-  if (syndrome !== "HPS" && syndrome !== "HFRS") {
-    return { ok: false, reason: `item for ${region}: invalid syndrome "${String(it.syndrome)}"` };
-  }
   if (status !== "Confirmed" && status !== "Suspected" && status !== "Pending") {
     return { ok: false, reason: `item for ${region}: invalid status "${String(it.status)}"` };
   }
 
-  // When reported_at was defaulted it differs on every run, so hashing it
-  // would mint a new id per run and duplicate the same DON item. Fall back
-  // to region + summary, which are stable across runs for the same item.
   const caseId =
     it.case_id?.trim() ||
     it.external_id?.trim() ||
     stableCaseId(
+      matcher.prefix,
       reportedAtDefaulted
-        ? `${region}|${it.summary ?? ""}`
-        : `${region}|${reportedAt}|${it.summary ?? ""}`,
+        ? `${matcher.slug}|${region}|${it.summary ?? ""}`
+        : `${matcher.slug}|${region}|${reportedAt}|${it.summary ?? ""}`,
     );
 
   return {
     ok: true,
     value: {
       case_id: caseId,
+      disease_slug: matcher.slug,
       region,
       lat: coordinates.lat,
       lng: coordinates.lng,
@@ -165,7 +226,6 @@ Deno.serve(async (req) => {
     }
     supabase = createClient(supabaseUrl, supabaseKey);
 
-    // --- Step 1: Scrape the WHO DON page using Firecrawl ---
     const firecrawlKey = Deno.env.get("FIRECRAWL_API_KEY");
     if (!firecrawlKey) {
       return new Response("FIRECRAWL_API_KEY secret is not set", { status: 500 });
@@ -185,32 +245,18 @@ Deno.serve(async (req) => {
                 items: {
                   type: "object",
                   properties: {
-                    case_id: {
+                    case_id: { type: "string" },
+                    disease_slug: {
                       type: "string",
-                      description:
-                        "A unique identifier for the DON item, e.g. slug or URL path segment",
+                      enum: ["hantavirus", "dengue", "h5n1", "mpox", "arbovirus", "cholera"],
                     },
-                    region: { type: "string", description: "Country or region name" },
-                    lat: { type: "number", description: "Approximate latitude of the region" },
-                    lng: { type: "number", description: "Approximate longitude of the region" },
-                    reported_at: {
-                      type: "string",
-                      description: "Date of the report in ISO 8601 format",
-                    },
-                    syndrome: {
-                      type: "string",
-                      enum: ["HPS", "HFRS"],
-                      description: "Hantavirus syndrome type",
-                    },
-                    status: {
-                      type: "string",
-                      enum: ["Confirmed", "Suspected", "Pending"],
-                      description: "Case status",
-                    },
-                    summary: {
-                      type: "string",
-                      description: "Brief summary of the outbreak news item",
-                    },
+                    region: { type: "string" },
+                    lat: { type: "number" },
+                    lng: { type: "number" },
+                    reported_at: { type: "string" },
+                    syndrome: { type: "string" },
+                    status: { type: "string", enum: ["Confirmed", "Suspected", "Pending"] },
+                    summary: { type: "string" },
                   },
                   required: ["case_id", "region", "reported_at"],
                 },
@@ -224,8 +270,6 @@ Deno.serve(async (req) => {
       timeout: 120000,
     });
 
-    // Retry transient Firecrawl failures (429/5xx) with exponential backoff;
-    // a single blip should not fail the whole ingest run.
     let scrape: Response | null = null;
     let lastErrText = "";
     for (let attempt = 0; attempt < 3; attempt++) {
@@ -246,7 +290,7 @@ Deno.serve(async (req) => {
       scrape = res;
     }
     if (!scrape) {
-      return new Response(`scrape failed: no response`, { status: 502 });
+      return new Response("scrape failed: no response", { status: 502 });
     }
     if (!scrape.ok) {
       const errText =
@@ -255,13 +299,9 @@ Deno.serve(async (req) => {
     }
 
     const scrapeResult = await scrape.json();
-
-    // A 200 with an errored or malformed payload must fail the run; otherwise
-    // an upstream schema change would silently masquerade as "no news".
     if (scrapeResult?.success === false) {
       throw new Error(`firecrawl reported failure: ${JSON.stringify(scrapeResult?.error ?? "")}`);
     }
-    // Firecrawl returns { success, data: { json: { ... }, markdown, ... } }
     const jsonData = scrapeResult?.data?.json ?? scrapeResult?.data;
     const rawItems: RawDonItem[] | null = Array.isArray(jsonData)
       ? jsonData
@@ -272,32 +312,21 @@ Deno.serve(async (req) => {
       throw new Error("malformed firecrawl payload: expected data.json or data.json.items array");
     }
 
-    // Filter for hantavirus-related items only
-    const hantaKeywords = [
-      "hantavirus",
-      "hanta",
-      "hps",
-      "hfrs",
-      "hemorrhagic fever with renal syndrome",
-      "hantavirus pulmonary syndrome",
-    ];
-    const items = rawItems.filter((it) => {
-      const text = JSON.stringify(it).toLowerCase();
-      return hantaKeywords.some((kw) => text.includes(kw));
-    });
+    const matched: Array<{ item: RawDonItem; matcher: (typeof DISEASE_MATCHERS)[number] }> = [];
+    for (const it of rawItems) {
+      const matcher = classifyDisease(it);
+      if (matcher) matched.push({ item: it, matcher });
+    }
 
-    // Validate and normalize; drop rows with unusable geo/dates instead of
-    // writing 0,0 coordinates or malformed timestamps into the registry.
     const rejected: string[] = [];
     const cases: NormalizedCase[] = [];
-    for (const it of items) {
-      const res = await normalizeItem(it);
+    for (const { item, matcher } of matched) {
+      const res = await normalizeItem(item, matcher);
       if (res.ok) cases.push(res.value);
       else rejected.push(res.reason);
     }
 
     if (cases.length === 0) {
-      // No usable hantavirus items – log the run but don't error
       try {
         await supabase.from("infra_ingest_runs").insert({
           source: INGEST_SOURCE,
@@ -315,14 +344,11 @@ Deno.serve(async (req) => {
         ok: true,
         ingested: 0,
         alerts: 0,
-        note: `Scraped ${rawItems.length} DON items, ${items.length} matched hantavirus keywords, 0 passed validation.`,
+        note: `Scraped ${rawItems.length} DON items, ${matched.length} matched monitored pathogens, 0 passed validation.`,
         rejected,
       });
     }
 
-    // Fetch current statuses so the upsert can tell new rows apart from
-    // status transitions (a DON item first seen as Suspected that later
-    // becomes Confirmed must update the existing row, not be skipped).
     const caseIds = cases.map((c) => c.case_id);
     const { data: existing, error: fetchError } = await supabase
       .from("hanta_cases")
@@ -334,12 +360,11 @@ Deno.serve(async (req) => {
     const { data: upserted, error } = await supabase
       .from("hanta_cases")
       .upsert(cases, { onConflict: "case_id" })
-      .select("id, case_id, region, status");
+      .select("id, case_id, disease_slug, region, status");
 
     if (error) throw error;
     ingestedCount = (upserted ?? []).filter((c) => !existingStatusById.has(c.case_id)).length;
 
-    // Alert on confirmed cases that are new or just transitioned to Confirmed.
     const alerts = (upserted ?? [])
       .filter((c) => {
         if (c.status !== "Confirmed") return false;
@@ -348,10 +373,12 @@ Deno.serve(async (req) => {
       })
       .map((c) => ({
         level: "critical" as const,
+        disease_slug: c.disease_slug,
+        signal_source: "who_don" as const,
         title:
           existingStatusById.has(c.case_id) && existingStatusById.get(c.case_id) !== "Confirmed"
-            ? "WHO DON case status changed to Confirmed"
-            : "New confirmed hantavirus case ingested from WHO DON",
+            ? `WHO DON ${c.disease_slug.toUpperCase()} status changed to Confirmed`
+            : `New confirmed ${c.disease_slug.toUpperCase()} case ingested from WHO DON`,
         region: c.region,
       }));
     if (alerts.length) {
