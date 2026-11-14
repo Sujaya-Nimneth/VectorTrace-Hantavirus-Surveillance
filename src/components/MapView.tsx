@@ -32,7 +32,9 @@ import { Center } from "@astryxdesign/core/Center";
 import { Spinner } from "@astryxdesign/core/Spinner";
 
 import { useCases, useRodents } from "@/hooks/use-surveillance";
+import { useDiseaseFilter } from "@/hooks/use-disease-filter";
 import { useNow } from "@/hooks/use-now";
+import { getDiseaseProfile, type SentinelType } from "@/lib/diseases";
 import { REGIONS, type Case, type RodentSite } from "@/lib/mock-data";
 import { DAY_MS } from "@/lib/time";
 import { getMapTileConfig } from "@/lib/map-config";
@@ -58,12 +60,29 @@ const RANGES: Array<{ days: 7 | 30 | 90; label: string }> = [
   { days: 90, label: "90D" },
 ];
 
-const rodentIcon = L.divIcon({
-  className: "",
-  iconSize: [20, 20],
-  iconAnchor: [10, 10],
-  html: `<svg width="20" height="20" viewBox="0 0 20 20" aria-hidden="true"><polygon points="10,2 18,16 2,16" fill="#0d9488" stroke="#f8fafc" stroke-width="1.5"/></svg>`,
-});
+function createSentinelIcon(shapeSvg: string) {
+  return L.divIcon({
+    className: "",
+    iconSize: [20, 20],
+    iconAnchor: [10, 10],
+    html: `<svg width="20" height="20" viewBox="0 0 20 20" aria-hidden="true">${shapeSvg}</svg>`,
+  });
+}
+
+const SENTINEL_ICONS: Record<SentinelType, L.DivIcon> = {
+  rodent_trap: createSentinelIcon(
+    `<polygon points="10,2 18,16 2,16" fill="#0d9488" stroke="#f8fafc" stroke-width="1.5"/>`,
+  ),
+  mosquito_ovitrap: createSentinelIcon(
+    `<rect x="4" y="4" width="12" height="12" rx="2" fill="#0284c7" stroke="#f8fafc" stroke-width="1.5"/>`,
+  ),
+  avian_sentinel: createSentinelIcon(
+    `<polygon points="10,2 18,10 10,18 2,10" fill="#d97706" stroke="#f8fafc" stroke-width="1.5"/>`,
+  ),
+  wastewater_node: createSentinelIcon(
+    `<polygon points="10,2 17,6 17,14 10,18 3,14 3,6" fill="#7c3aed" stroke="#f8fafc" stroke-width="1.5"/>`,
+  ),
+};
 
 function HeatLayer({ points }: { points: [number, number, number][] }) {
   const map = useMap();
@@ -156,18 +175,22 @@ const CaseDot = memo(function CaseDot({
   );
 });
 
-const RodentPin = memo(function RodentPin({ r }: { r: RodentSite }) {
+const SentinelPin = memo(function SentinelPin({ r }: { r: RodentSite }) {
+  const profile = getDiseaseProfile(r.diseaseSlug);
+  const sentinelType = r.sentinelType ?? profile.sentinelType;
   return (
-    <Marker position={[r.lat, r.lng]} icon={rodentIcon}>
+    <Marker position={[r.lat, r.lng]} icon={SENTINEL_ICONS[sentinelType]}>
       <Popup>
         <VStack gap={1}>
           <Text type="label" weight="semibold">
             {r.id} · {r.region}
           </Text>
           <Text type="supporting">
-            {r.species} · {(r.positivity * 100).toFixed(0)}% seropositive
+            {profile.sentinelSingular} · {r.species} · {(r.positivity * 100).toFixed(0)}% positive
           </Text>
-          <Text type="supporting">Sampled {r.date}</Text>
+          <Text type="supporting">
+            {profile.shortName} · Sampled {r.date}
+          </Text>
         </VStack>
       </Popup>
     </Marker>
@@ -189,19 +212,20 @@ export function MapView() {
   const search = useSearch({ from: "/map" });
   const navigate = useNavigate();
   const now = useNow();
+  const { disease } = useDiseaseFilter();
 
   const {
     data: cases = [],
     loading: casesLoading,
     error: casesError,
     refetch: refetchCases,
-  } = useCases();
+  } = useCases(disease);
   const {
     data: rodents = [],
     loading: rodentsLoading,
     error: rodentsError,
     refetch: refetchRodents,
-  } = useRodents();
+  } = useRodents(disease);
 
   const [days, setDays] = useState<7 | 30 | 90>(90);
   const selectedRegion = search.region ?? "all";
@@ -294,17 +318,21 @@ export function MapView() {
     [navigate],
   );
 
+  const selectedProfile = selectedCase ? getDiseaseProfile(selectedCase.diseaseSlug) : null;
+  const proximityKm = selectedProfile?.proximityRadiusKm ?? 5;
+
   const nearbyRodents = useMemo(() => {
     if (!selectedCase || !isPlottable(selectedCase)) return [];
     const lat = selectedCase.lat;
     const lng = selectedCase.lng;
+    const radiusKm = getDiseaseProfile(selectedCase.diseaseSlug).proximityRadiusKm;
     return rodents
       .filter(isPlottable)
       .map((site) => ({
         site,
         distanceKm: haversineKm(lat, lng, site.lat, site.lng),
       }))
-      .filter((entry) => entry.distanceKm <= 5)
+      .filter((entry) => entry.distanceKm <= radiusKm)
       .sort((a, b) => a.distanceKm - b.distanceKm);
   }, [selectedCase, rodents]);
 
@@ -373,8 +401,8 @@ export function MapView() {
             <ToggleButton value="cases" label="Human cases">
               Cases
             </ToggleButton>
-            <ToggleButton value="rodents" label="Rodent traps">
-              Traps
+            <ToggleButton value="rodents" label="Sentinel sites">
+              Sentinels
             </ToggleButton>
             <ToggleButton value="heat" label="Density heat">
               Heat
@@ -431,18 +459,18 @@ export function MapView() {
               {showCases && selectedCase && isPlottable(selectedCase) && drawerOpen && (
                 <Circle
                   center={[selectedCase.lat, selectedCase.lng]}
-                  radius={5000}
+                  radius={proximityKm * 1000}
                   pathOptions={{
-                    color: "#0d9488",
+                    color: selectedProfile?.chartColor ?? "#0d9488",
                     weight: 1.5,
                     dashArray: "4 4",
-                    fillColor: "#0d9488",
+                    fillColor: selectedProfile?.chartColor ?? "#0d9488",
                     fillOpacity: 0.08,
                   }}
                 />
               )}
 
-              {showRodents && visibleRodents.map((r) => <RodentPin key={r.id} r={r} />)}
+              {showRodents && visibleRodents.map((r) => <SentinelPin key={r.id} r={r} />)}
             </MapContainer>
           )}
         </VStack>
@@ -471,13 +499,14 @@ export function MapView() {
               <Text type="supporting">Pending</Text>
             </HStack>
             <HStack gap={1.5} align="center">
-              <StatusDot variant="success" label="Rodent trap site" />
-              <Text type="supporting">Rodent trap</Text>
+              <StatusDot variant="success" label="Sentinel site" />
+              <Text type="supporting">Sentinel site</Text>
             </HStack>
           </HStack>
 
           <Text type="supporting" hasTabularNumbers>
-            {visibleCases.length} plotted cases · {visibleRodents.length} trap sites · 5 km
+            {visibleCases.length} plotted cases · {visibleRodents.length} sentinel sites ·{" "}
+            {selectedProfile ? `${proximityKm} km (${selectedProfile.shortName})` : "2–15 km"}{" "}
             proximity check
           </Text>
         </HStack>
@@ -492,7 +521,7 @@ export function MapView() {
         hasScrim={false}
         padding={4}
       >
-        {selectedCase && (
+        {selectedCase && selectedProfile && (
           <VStack gap={4}>
             <DrawerHeader
               title={selectedCase.id}
@@ -503,10 +532,12 @@ export function MapView() {
 
             <HStack gap={2} align="center" wrap="wrap">
               <Token color={statusTokenColor} label={selectedCase.status} />
+              <Token color="teal" label={selectedProfile.shortName} />
               <Token color="blue" label={selectedCase.syndrome} />
             </HStack>
 
             <MetadataList columns={2} title="Patient & exposure">
+              <MetadataListItem label="Pathogen">{selectedProfile.name}</MetadataListItem>
               <MetadataListItem label="Syndrome">{selectedCase.syndrome}</MetadataListItem>
               <MetadataListItem label="Onset date">{selectedCase.date}</MetadataListItem>
               <MetadataListItem label="Age / Sex">
@@ -534,13 +565,13 @@ export function MapView() {
             <Divider />
 
             <VStack gap={3}>
-              <Heading level={3}>Reservoir proximity (&le; 5 km)</Heading>
+              <Heading level={3}>Sentinel proximity (&le; {proximityKm} km)</Heading>
               {nearbyRodents.length > 0 ? (
                 <VStack gap={2}>
                   <Banner
                     status="warning"
-                    title={`${nearbyRodents.length} seropositive trap site(s) within 5 km`}
-                    description="Coordinates intersect active Sigmodontinae sampling radius."
+                    title={`${nearbyRodents.length} positive ${selectedProfile.sentinelSingular.toLowerCase()}(s) within ${proximityKm} km`}
+                    description={`Coordinates intersect active ${selectedProfile.shortName} (${selectedProfile.category}) monitoring radius.`}
                   />
                   <List edge="outset" density="compact">
                     {nearbyRodents.map(({ site, distanceKm }) => (
@@ -561,8 +592,8 @@ export function MapView() {
               ) : (
                 <EmptyState
                   isCompact
-                  title="No traps within 5 km"
-                  description="No recorded rodent sampling stations fall inside a 5 km radius of this case."
+                  title={`No sentinels within ${proximityKm} km`}
+                  description={`No recorded ${selectedProfile.sentinelLabel.toLowerCase()} fall inside the ${proximityKm} km monitoring radius of this case.`}
                 />
               )}
             </VStack>

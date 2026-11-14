@@ -28,7 +28,9 @@ import { REGIONS, type Case } from "@/lib/mock-data";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/use-auth";
 import { useRoles } from "@/hooks/use-roles";
-import { SYMPTOMS } from "@/lib/intake-data";
+import { useDiseaseFilter } from "@/hooks/use-disease-filter";
+import { DISEASES, getDiseaseProfile, isDiseaseSlug, type DiseaseSlug } from "@/lib/diseases";
+import { SYMPTOMS, getSymptomsForDisease } from "@/lib/intake-data";
 import { DEFAULT_INTAKE_FORM, intakeSchema, type IntakeForm } from "@/lib/intake-schema";
 import { Step2Clinical } from "@/components/Step2Clinical";
 import { QueryError } from "@/components/QueryError";
@@ -53,6 +55,7 @@ const DRAFT_STORAGE_KEY = "vectortrace_intake_draft_v1";
 function Intake() {
   const { user, loading } = useAuth();
   const { isClinician, error: rolesError, loading: rolesLoading } = useRoles();
+  const { disease: globalDisease } = useDiseaseFilter();
   const navigate = useNavigate();
   const queryClient = useQueryClient();
 
@@ -61,14 +64,20 @@ function Intake() {
   const [err, setErr] = useState<string | null>(null);
 
   const [form, setForm] = useState<IntakeForm>(() => {
-    if (typeof window === "undefined") return DEFAULT_INTAKE_FORM;
+    const initialDisease: DiseaseSlug = globalDisease !== "all" ? globalDisease : "hantavirus";
+    const fallbackForm: IntakeForm = {
+      ...DEFAULT_INTAKE_FORM,
+      diseaseSlug: initialDisease,
+      syndrome: getDiseaseProfile(initialDisease).syndromes[0]?.code ?? "HPS",
+    };
+    if (typeof window === "undefined") return fallbackForm;
     try {
       const saved = localStorage.getItem(DRAFT_STORAGE_KEY);
-      if (saved) return { ...DEFAULT_INTAKE_FORM, ...(JSON.parse(saved) as Partial<IntakeForm>) };
+      if (saved) return { ...fallbackForm, ...(JSON.parse(saved) as Partial<IntakeForm>) };
     } catch {
       // Malformed draft JSON — ignore and use default.
     }
-    return DEFAULT_INTAKE_FORM;
+    return fallbackForm;
   });
 
   const [draftRestored, setDraftRestored] = useState(() => {
@@ -135,6 +144,17 @@ function Intake() {
     setForm((f) => ({ ...f, [k]: v }));
   };
 
+  const setDisease = (diseaseSlug: DiseaseSlug) => {
+    const profile = getDiseaseProfile(diseaseSlug);
+    const allowedSymptoms = new Set(profile.symptoms);
+    setForm((prev) => ({
+      ...prev,
+      diseaseSlug,
+      syndrome: profile.syndromes[0]?.code ?? prev.syndrome,
+      symptoms: prev.symptoms.filter((s) => allowedSymptoms.has(s)),
+    }));
+  };
+
   const setRegion = (regionName: string) => {
     const found = REGIONS.find((r) => r.name === regionName);
     setForm((prev) => ({
@@ -165,15 +185,17 @@ function Intake() {
     setBusy(true);
     setErr(null);
     try {
+      const profile = getDiseaseProfile(form.diseaseSlug);
       const lat = parseFloat(form.lat);
       const lng = parseFloat(form.lng);
-      const case_id = `HTV-${new Date().getFullYear()}-${String(Math.floor(Math.random() * 900) + 100)}`;
+      const case_id = `${profile.casePrefix}-${new Date().getFullYear()}-${String(Math.floor(Math.random() * 900) + 100)}`;
       const reportedAt = form.onsetDate
         ? new Date(form.onsetDate).toISOString()
         : new Date().toISOString();
 
       const { error } = await supabase.from("hanta_cases").insert({
         case_id,
+        disease_slug: profile.slug,
         region: form.region,
         lat,
         lng,
@@ -189,6 +211,7 @@ function Intake() {
 
       const newCase: Case = {
         id: case_id,
+        diseaseSlug: profile.slug,
         region: form.region,
         lat,
         lng,
@@ -212,7 +235,7 @@ function Intake() {
         // ignore
       }
 
-      toast.success(`Case ${case_id} submitted to surveillance registry`);
+      toast.success(`Case ${case_id} (${profile.shortName}) submitted to surveillance registry`);
       void navigate({ to: "/dashboard" });
     } catch (e: unknown) {
       setErr(e instanceof Error ? e.message : String(e));
@@ -221,8 +244,15 @@ function Intake() {
     }
   };
 
+  const activeProfile = getDiseaseProfile(form.diseaseSlug);
+  const availableSymptoms = getSymptomsForDisease(activeProfile.slug);
   const symptomLabels = form.symptoms
-    .map((k) => SYMPTOMS.find((s) => s.k === k)?.label ?? k)
+    .map(
+      (k) =>
+        availableSymptoms.find((s) => s.k === k)?.label ??
+        SYMPTOMS.find((s) => s.k === k)?.label ??
+        k,
+    )
     .join(", ");
 
   return (
@@ -231,8 +261,8 @@ function Intake() {
         <VStack gap={1} paddingBlockEnd={4}>
           <Heading level={1}>Rapid Case Intake</Heading>
           <Text type="supporting">
-            Submit a new hantavirus epidemiological case notification directly into the live
-            registry.
+            Submit a new {activeProfile.name} case notification directly into the multi-pathogen
+            surveillance registry.
           </Text>
         </VStack>
       </LayoutHeader>
@@ -269,6 +299,19 @@ function Intake() {
             <VStack gap={5}>
               {step === 1 && (
                 <FormLayout>
+                  <Selector
+                    label="Target pathogen"
+                    isRequired
+                    options={DISEASES.map((d) => ({
+                      value: d.slug,
+                      label: `${d.name} (${d.casePrefix})`,
+                    }))}
+                    value={form.diseaseSlug}
+                    onChange={(val) => {
+                      if (isDiseaseSlug(val)) setDisease(val);
+                    }}
+                  />
+
                   <NumberInput
                     label="Patient age"
                     isOptional
@@ -319,6 +362,7 @@ function Intake() {
 
               {step === 2 && (
                 <Step2Clinical
+                  diseaseSlug={form.diseaseSlug}
                   syndrome={form.syndrome}
                   symptoms={form.symptoms}
                   onsetDate={form.onsetDate}
@@ -332,7 +376,7 @@ function Intake() {
                     label="Suspected exposure"
                     isOptional
                     rows={4}
-                    placeholder="Rural lodging, rodent contact, agricultural site, etc."
+                    placeholder="Rural lodging, stagnant water containers, poultry contact, healthcare/travel cluster, etc."
                     value={form.exposure}
                     onChange={(val) => upd("exposure", val)}
                   />
@@ -353,6 +397,7 @@ function Intake() {
               {step === 4 && (
                 <VStack gap={4}>
                   <MetadataList columns={2} title="Review case notification">
+                    <MetadataListItem label="Pathogen">{activeProfile.name}</MetadataListItem>
                     <MetadataListItem label="Patient age">
                       {form.age ? `${form.age} years` : "Not recorded"}
                     </MetadataListItem>

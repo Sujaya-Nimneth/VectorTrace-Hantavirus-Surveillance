@@ -8,17 +8,27 @@ import { VStack } from "@astryxdesign/core/VStack";
 import { Icon } from "@astryxdesign/core/Icon";
 import { Text } from "@astryxdesign/core/Text";
 
-import { SYMPTOMS } from "@/lib/intake-data";
+import { getDiseaseProfile, type DiseaseSlug } from "@/lib/diseases";
+import { getSymptomsForDisease } from "@/lib/intake-data";
 
 type Step2Props = {
+  diseaseSlug?: DiseaseSlug;
   syndrome: string;
   symptoms: string[];
   onsetDate: string;
   onChange: (patch: { syndrome?: string; symptoms?: string[]; onsetDate?: string }) => void;
 };
 
-export function Step2Clinical({ syndrome, symptoms, onsetDate, onChange }: Step2Props) {
+export function Step2Clinical({
+  diseaseSlug = "hantavirus",
+  syndrome,
+  symptoms,
+  onsetDate,
+  onChange,
+}: Step2Props) {
   const sympSet = new Set(symptoms);
+  const profile = getDiseaseProfile(diseaseSlug);
+  const availableSymptoms = getSymptomsForDisease(profile.slug);
 
   const toggle = (k: string, checked: boolean) => {
     const next = new Set(sympSet);
@@ -36,18 +46,16 @@ export function Step2Clinical({ syndrome, symptoms, onsetDate, onChange }: Step2
         label="Clinical syndrome"
         orientation="horizontal"
         value={syndrome}
-        onChange={(val) => onChange({ syndrome: val as "HPS" | "HFRS" })}
+        onChange={(val) => onChange({ syndrome: val })}
       >
-        <RadioListItem
-          value="HPS"
-          label="HPS — Pulmonary"
-          description="Hantavirus Pulmonary Syndrome"
-        />
-        <RadioListItem
-          value="HFRS"
-          label="HFRS — Renal"
-          description="Hemorrhagic Fever with Renal Syndrome"
-        />
+        {profile.syndromes.map((item) => (
+          <RadioListItem
+            key={item.code}
+            value={item.code}
+            label={`${item.code} — ${item.label}`}
+            description={item.description}
+          />
+        ))}
       </RadioList>
 
       <DateInput
@@ -60,10 +68,10 @@ export function Step2Clinical({ syndrome, symptoms, onsetDate, onChange }: Step2
 
       <VStack gap={2}>
         <Text type="label" weight="medium">
-          Observed clinical symptoms (optional)
+          Observed {profile.shortName} symptoms (optional)
         </Text>
         <Grid columns={{ minWidth: 200, max: 2, repeat: "fit" }} gap={2}>
-          {SYMPTOMS.map((s) => {
+          {availableSymptoms.map((s) => {
             const active = sympSet.has(s.k);
             return (
               <SelectableCard
