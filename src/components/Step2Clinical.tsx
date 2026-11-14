@@ -11,10 +11,10 @@ import { Text } from "@astryxdesign/core/Text";
 import { SYMPTOMS } from "@/lib/intake-data";
 
 type Step2Props = {
-  syndrome: "HPS" | "HFRS";
+  syndrome: string;
   symptoms: string[];
   onsetDate: string;
-  onChange: (patch: { syndrome?: "HPS" | "HFRS"; symptoms?: string[]; onsetDate?: string }) => void;
+  onChange: (patch: { syndrome?: string; symptoms?: string[]; onsetDate?: string }) => void;
 };
 
 export function Step2Clinical({ syndrome, symptoms, onsetDate, onChange }: Step2Props) {
