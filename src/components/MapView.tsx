@@ -506,7 +506,7 @@ export function MapView() {
 
           <Text type="supporting" hasTabularNumbers>
             {visibleCases.length} plotted cases · {visibleRodents.length} sentinel sites ·{" "}
-            {selectedProfile ? `${proximityKm} km (${selectedProfile.shortName})` : "2–15 km"}{" "}
+            {selectedProfile ? `${proximityKm} km (${selectedProfile.shortName})` : "1.5–10 km"}{" "}
             proximity check
           </Text>
         </HStack>

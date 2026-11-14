@@ -59,7 +59,7 @@ const SUBSYSTEMS = [
   {
     name: "Geospatial Proximity Tracker",
     cadence: "On focus",
-    contract: "Adaptive 2–15 km Haversine overlap across 4 vector & wastewater sentinel types",
+    contract: "Adaptive 1.5–10 km Haversine overlap across 4 vector & wastewater sentinel types",
     href: "/map",
     cta: "Open map",
   },
@@ -193,7 +193,9 @@ function LandingPage() {
                     <MetadataListItem label="Monitored pathogens">
                       6 active diseases
                     </MetadataListItem>
-                    <MetadataListItem label="Spatial check">2–15 km vector radii</MetadataListItem>
+                    <MetadataListItem label="Spatial check">
+                      1.5–10 km vector radii
+                    </MetadataListItem>
                     <MetadataListItem label="Market nowcast">17 equity tickers</MetadataListItem>
                   </MetadataList>
                 </VStack>

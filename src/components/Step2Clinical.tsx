@@ -52,7 +52,7 @@ export function Step2Clinical({
           <RadioListItem
             key={item.code}
             value={item.code}
-            label={`${item.code} — ${item.label}`}
+            label={item.label}
             description={item.description}
           />
         ))}

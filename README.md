@@ -11,14 +11,14 @@
 
 ### Monitored Pathogens & Bio-Financial Baskets
 
-| Pathogen                 | Code   | Sentinel Modality       | Radius  | Lead-Indicator Equities                               |
-| ------------------------ | ------ | ----------------------- | ------- | ----------------------------------------------------- |
-| **Hantavirus**           | `HTV`  | Rodent traps            | `5 km`  | `RGNX`, `BCRX`, `GILD`, `HOLX`                        |
-| **Dengue Fever**         | `DNG`  | Mosquito ovitraps       | `3 km`  | `TAK`, `SNY`, `MRK`, `ABT`, `TMO`, `FMC`, `BAYRY`     |
-| **Avian Influenza H5N1** | `H5N1` | Avian/dairy sentinels   | `15 km` | `CSLLY`, `GSK`, `SNY`, `MRNA`, `NVAX`, `RHHBY`, `ZTS` |
-| **Mpox**                 | `MPX`  | Wastewater surveillance | `10 km` | `BVNRY`, `SIGA`, `EBS`, `HOLX`                        |
-| **Chikungunya / Zika**   | `CHK`  | Mosquito ovitraps       | `3 km`  | `VALN`, `TAK`, `ABT`, `FMC`                           |
-| **Cholera / Waterborne** | `CHL`  | Wastewater surveillance | `2 km`  | `EBS`, `DXCM`, `ABT`, `BDX`                           |
+| Pathogen                 | Code  | Sentinel Modality    | Radius   | Lead-Indicator Equities           |
+| ------------------------ | ----- | -------------------- | -------- | --------------------------------- |
+| **Hantavirus**           | `HTV` | Rodent traps         | `5 km`   | `GETI-B.ST`, `BAX`, `DHR`, `RTO`  |
+| **Dengue Fever**         | `DNV` | Mosquito ovitraps    | `1.5 km` | `TAK`, `ABT`, `BAX`, `RTO`        |
+| **Avian Influenza H5N1** | `H5N` | Avian sentinels      | `10 km`  | `CSL.AX`, `MRNA`, `RHHBY`, `QGEN` |
+| **Mpox**                 | `MPX` | Wastewater nodes     | `5 km`   | `BAVA.CO`, `SIGA`, `DHR`, `EBS`   |
+| **Chikungunya / Zika**   | `ARV` | Mosquito ovitraps    | `1.5 km` | `VALN`, `BIM.PA`, `ABT`, `RTO`    |
+| **Cholera / Waterborne** | `CHL` | Water / sewage nodes | `3 km`   | `BAX`, `BIM.PA`, `BDX`, `ABT`     |
 
 ### Screenshots
 
@@ -39,9 +39,9 @@
 - **Public corridor & forecast snapshot** — `/` greets visitors with live corridor incidence metrics, multi-pathogen **Risk forecast** nowcasts (`Corridors` / `Risk forecast` / `Recent cases`), and module status contracts.
 - **Bio-Financial Outbreak Predictor** — `/predictions` computes market-neutral cumulative abnormal returns (`CAR_i,t = r_i,t - [0.65·r_XBI,t + 0.35·r_SPY,t]`), institutional volume Z-scores, Wikimedia syndromic velocity, and Open-Meteo vector suitability — producing composite risk scores (`0–100`) and `+7d` to `+21d` lead-lag cross-correlations per disease basket.
 - **Multi-pathogen dashboard** — `/dashboard` switches seamlessly across any single disease or aggregated all-pathogen mode via the top-bar pathogen selector, plotting multi-pathogen epidemic curves (`7D` / `30D` / `90D`), market-divergence early-warning banners, severity/source-tagged alerts, and sortable incidence tables (`/ 100k`) with CSV export.
-- **Adaptive geospatial tracker** — `/map` plots human cases alongside 4 distinct sentinel site shapes (rodent traps, mosquito ovitraps, avian sentinels, wastewater nodes) and evaluates pathogen-specific Haversine proximity radii (`2 km`–`15 km`).
+- **Adaptive geospatial tracker** — `/map` plots human cases alongside 4 distinct sentinel site shapes (rodent traps, mosquito ovitraps, avian sentinels, wastewater nodes) and evaluates pathogen-specific Haversine proximity radii (`1.5 km`–`10 km`).
 - **Global command palette & alerts** — `⌘K` / `Ctrl+K` quick jump across pages, pathogens, pharma tickers, corridors, cases, and sentinel sites alongside a live alerts popover and persisted light/dark mode.
-- **Dynamic 4-step case intake** — `/intake` lets clinicians select the target pathogen, dynamically adapting syndromes (e.g., `HPS`/`HFRS`, `DF`/`DHF`/`DSS`, `CLADE_1B`/`CLADE_2B`) and symptom checklists with zod validation and draft recovery.
+- **Dynamic 4-step case intake** — `/intake` lets clinicians select the target pathogen, dynamically adapting syndromes (e.g., `HPS`/`HFRS`, `DENV-Classic`/`DENV-Severe`, `Clade-I`/`Clade-II`) and symptom checklists with zod validation and draft recovery.
 - **Role-based access** — Supabase Auth with `admin` / `epidemiologist` / `viewer` roles enforced by Postgres RLS (UI route guards are convenience; Postgres RLS is the enforcement layer).
 - **Automated multi-source ingestion** — Edge Functions scrape WHO Disease Outbreak News (`ingest-don-feed`) with a multi-pathogen classifier, fetch Yahoo Finance equity bars + Wikimedia pageviews + Open-Meteo climate signals (`ingest-market-signals`) on a `pg_cron` schedule, and raise divergence/confirmation alerts.
 - **Admin observability console** — `/admin` monitors ingest telemetry, Yahoo Finance / Wikimedia / WHO probe uptimes, database latency against a `220ms` SLO threshold, and live feed logs.
