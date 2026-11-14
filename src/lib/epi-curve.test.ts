@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { buildEpidemicCurveBuckets, DAY_MS } from "./epi-curve";
+import { buildEpidemicCurveBuckets, buildPathogenCurveBuckets, DAY_MS } from "./epi-curve";
 
 const REGIONS = ["Pampa", "Cuyo"];
 const now = new Date("2026-10-24T12:00:00Z");
@@ -41,5 +41,18 @@ describe("buildEpidemicCurveBuckets", () => {
       expect(row.Cuyo).toBe(0);
       expect(row.trend).toBe(0);
     }
+  });
+
+  it("groups cases by pathogen slug across disease columns", () => {
+    const cases = [
+      { date: new Date(+now - 2 * DAY_MS).toISOString(), diseaseSlug: "dengue" as const },
+      { date: new Date(+now - 2 * DAY_MS).toISOString(), diseaseSlug: "dengue" as const },
+      { date: new Date(+now - 5 * DAY_MS).toISOString(), diseaseSlug: "mpox" as const },
+    ];
+    const buckets = buildPathogenCurveBuckets(cases, 30, ["dengue", "mpox"], now);
+    const dengueTotal = buckets.reduce((s, r) => s + Number(r.dengue || 0), 0);
+    const mpoxTotal = buckets.reduce((s, r) => s + Number(r.mpox || 0), 0);
+    expect(dengueTotal).toBe(2);
+    expect(mpoxTotal).toBe(1);
   });
 });

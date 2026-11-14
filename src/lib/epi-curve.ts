@@ -3,7 +3,7 @@ import type { Case } from "@/lib/mock-data";
 export type BucketRow = {
   date: string;
   trend?: number;
-  [region: string]: string | number | undefined;
+  [series: string]: string | number | undefined;
 };
 
 export const DAY_MS = 86_400_000;
@@ -15,14 +15,15 @@ const bucketKey = (now: Date, offsetDays: number): string => {
 };
 
 /**
- * Buckets cases into day windows for the epidemic curve.
- * Bucket offsets are generated with the same `floor(age / step) * step`
- * formula used to assign cases, so every window in range is reachable.
+ * Core bucketing primitive: assigns each case to a day bucket using a custom
+ * series key selector (`region` or `diseaseSlug`) and adds a 3-point moving
+ * average `trend` line.
  */
-export function buildEpidemicCurveBuckets(
-  cases: Pick<Case, "date" | "region">[],
+export function buildGroupedCurveBuckets<T extends Pick<Case, "date">>(
+  cases: T[],
   days: 7 | 30 | 90,
-  regionNames: string[],
+  seriesKeys: string[],
+  selectKey: (item: T) => string,
   now: Date = new Date(),
 ): BucketRow[] {
   const step = days === 90 ? 3 : 1;
@@ -32,8 +33,8 @@ export function buildEpidemicCurveBuckets(
   for (let i = maxOffset - (maxOffset % step); i >= 0; i -= step) {
     const key = bucketKey(now, i);
     const row: BucketRow = { date: key };
-    for (const region of regionNames) {
-      row[region] = 0;
+    for (const series of seriesKeys) {
+      row[series] = 0;
     }
     buckets[key] = row;
   }
@@ -44,8 +45,9 @@ export function buildEpidemicCurveBuckets(
     if (ageDays < 0 || ageDays > maxOffset) continue;
     const bucketOffset = Math.floor(ageDays / step) * step;
     const row = buckets[bucketKey(now, bucketOffset)];
-    if (row) {
-      row[c.region] = Number(row[c.region] || 0) + 1;
+    const groupKey = selectKey(c);
+    if (row && groupKey in row) {
+      row[groupKey] = Number(row[groupKey] || 0) + 1;
     }
   }
 
@@ -54,10 +56,40 @@ export function buildEpidemicCurveBuckets(
     const slice = arr.slice(Math.max(0, idx - 2), idx + 1);
     const avg =
       slice.reduce(
-        (sum, r) => sum + regionNames.reduce((acc, reg) => acc + Number(r[reg] || 0), 0),
+        (sum, r) => sum + seriesKeys.reduce((acc, key) => acc + Number(r[key] || 0), 0),
         0,
       ) / slice.length;
     row.trend = +avg.toFixed(1);
   });
   return arr;
+}
+
+/**
+ * Buckets cases into day windows grouped by geographic region.
+ */
+export function buildEpidemicCurveBuckets(
+  cases: Pick<Case, "date" | "region">[],
+  days: 7 | 30 | 90,
+  regionNames: string[],
+  now: Date = new Date(),
+): BucketRow[] {
+  return buildGroupedCurveBuckets(cases, days, regionNames, (c) => c.region, now);
+}
+
+/**
+ * Buckets cases into day windows grouped by pathogen (`diseaseSlug`).
+ */
+export function buildPathogenCurveBuckets(
+  cases: Pick<Case, "date" | "diseaseSlug">[],
+  days: 7 | 30 | 90,
+  diseaseSlugs: string[],
+  now: Date = new Date(),
+): BucketRow[] {
+  return buildGroupedCurveBuckets(
+    cases,
+    days,
+    diseaseSlugs,
+    (c) => c.diseaseSlug ?? "hantavirus",
+    now,
+  );
 }
