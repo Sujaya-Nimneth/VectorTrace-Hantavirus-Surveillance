@@ -12,8 +12,10 @@ import {
 import { Skeleton } from "@astryxdesign/core/Skeleton";
 import { VStack } from "@astryxdesign/core/VStack";
 import { useCases } from "@/hooks/use-surveillance";
+import { useDiseaseFilter } from "@/hooks/use-disease-filter";
+import { DISEASES, getDiseaseProfile } from "@/lib/diseases";
 import { REGIONS } from "@/lib/mock-data";
-import { buildEpidemicCurveBuckets } from "@/lib/epi-curve";
+import { buildEpidemicCurveBuckets, buildPathogenCurveBuckets } from "@/lib/epi-curve";
 import { QueryError } from "./QueryError";
 
 const REGION_STROKES = [
@@ -25,17 +27,35 @@ const REGION_STROKES = [
   "var(--color-data-red-4)",
 ];
 
-export function EpidemicCurve({ days = 90 }: { days?: 7 | 30 | 90 }) {
-  const { data: CASES, loading, error, refetch } = useCases();
+export function EpidemicCurve({
+  days = 90,
+  groupBy = "region",
+}: {
+  days?: 7 | 30 | 90;
+  groupBy?: "region" | "pathogen";
+}) {
+  const { disease } = useDiseaseFilter();
+  const { data: CASES, loading, error, refetch } = useCases(disease);
+
+  const activeDiseases = useMemo(
+    () => (disease === "all" ? DISEASES : [getDiseaseProfile(disease)]),
+    [disease],
+  );
 
   const data = useMemo(
     () =>
-      buildEpidemicCurveBuckets(
-        CASES,
-        days,
-        REGIONS.map((r) => r.name),
-      ),
-    [CASES, days],
+      groupBy === "pathogen"
+        ? buildPathogenCurveBuckets(
+            CASES,
+            days,
+            activeDiseases.map((d) => d.slug),
+          )
+        : buildEpidemicCurveBuckets(
+            CASES,
+            days,
+            REGIONS.map((r) => r.name),
+          ),
+    [CASES, days, groupBy, activeDiseases],
   );
 
   if (error) {
@@ -82,18 +102,32 @@ export function EpidemicCurve({ days = 90 }: { days?: 7 | 30 | 90 }) {
               color: "var(--color-text-secondary)",
             }}
           />
-          {REGIONS.map((region, idx) => (
-            <Line
-              key={region.name}
-              type="linear"
-              dataKey={region.name}
-              stroke={REGION_STROKES[idx % REGION_STROKES.length]}
-              strokeWidth={2}
-              dot={false}
-              activeDot={{ r: 4 }}
-              isAnimationActive={false}
-            />
-          ))}
+          {groupBy === "pathogen"
+            ? activeDiseases.map((profile) => (
+                <Line
+                  key={profile.slug}
+                  type="linear"
+                  dataKey={profile.slug}
+                  name={profile.shortName}
+                  stroke={profile.chartColor}
+                  strokeWidth={2}
+                  dot={false}
+                  activeDot={{ r: 4 }}
+                  isAnimationActive={false}
+                />
+              ))
+            : REGIONS.map((region, idx) => (
+                <Line
+                  key={region.name}
+                  type="linear"
+                  dataKey={region.name}
+                  stroke={REGION_STROKES[idx % REGION_STROKES.length]}
+                  strokeWidth={2}
+                  dot={false}
+                  activeDot={{ r: 4 }}
+                  isAnimationActive={false}
+                />
+              ))}
         </LineChart>
       </ResponsiveContainer>
     </VStack>

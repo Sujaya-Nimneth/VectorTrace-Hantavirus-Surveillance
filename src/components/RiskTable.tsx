@@ -22,6 +22,7 @@ import { Skeleton } from "@astryxdesign/core/Skeleton";
 import { ArrowDown, ArrowUp, ArrowUpDown, Download } from "lucide-react";
 
 import { useCases } from "@/hooks/use-surveillance";
+import { useDiseaseFilter } from "@/hooks/use-disease-filter";
 import { useNow } from "@/hooks/use-now";
 import { REGIONS } from "@/lib/mock-data";
 import { buildCsv, downloadCsv } from "@/lib/csv";
@@ -37,7 +38,8 @@ const WINDOWS = [
 ];
 
 export function RiskTable() {
-  const { data: CASES, loading, error, refetch } = useCases();
+  const { disease } = useDiseaseFilter();
+  const { data: CASES, loading, error, refetch } = useCases(disease);
   const now = useNow();
   const [windowDays, setWindowDays] = useState<number>(90);
   const [regionFilter, setRegionFilter] = useState<string>("all");
@@ -83,7 +85,7 @@ export function RiskTable() {
       ["Region", "Population", "Total Cases", "Confirmed", "Incidence / 100k", "Risk Tier"],
       rows.map((r) => [r.region, r.pop, r.total, r.confirmed, r.rate.toFixed(2), r.tier]),
     );
-    downloadCsv(`vectortrace-regional-risk-${windowDays}d.csv`, csv);
+    downloadCsv(`vectortrace-regional-risk-${disease}-${windowDays}d.csv`, csv);
   };
 
   if (error) {
