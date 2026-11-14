@@ -21,9 +21,12 @@ import { StatusDot } from "@astryxdesign/core/StatusDot";
 import { Timestamp } from "@astryxdesign/core/Timestamp";
 import { EmptyState } from "@astryxdesign/core/EmptyState";
 import { Kbd } from "@astryxdesign/core/Kbd";
+import { Selector } from "@astryxdesign/core/Selector";
 import { Activity, Bell, LogIn, LogOut, MapPin, Moon, Search, Sun } from "lucide-react";
 
 import { useCases, useRodents, useAlerts } from "@/hooks/use-surveillance";
+import { useDiseaseFilter } from "@/hooks/use-disease-filter";
+import { DISEASES, PHARMA_TICKERS, getDiseaseProfile, isDiseaseSlug } from "@/lib/diseases";
 import { REGIONS } from "@/lib/mock-data";
 import { useAuth } from "@/hooks/use-auth";
 import { useRoles } from "@/hooks/use-roles";
@@ -33,16 +36,17 @@ const ALERTS_READ_KEY = "vectortrace_alerts_last_read";
 
 const ROUTE_TITLES: Record<string, string> = {
   "/dashboard": "Surveillance Dashboard",
+  "/predictions": "Outbreak Predictor",
   "/map": "Geospatial Tracker",
   "/intake": "Rapid Case Intake",
   "/admin": "System Infrastructure",
 };
 
 type SearchTarget = {
-  group: "Pages" | "Regions" | "Cases" | "Rodent Sites";
+  group: "Pages" | "Pathogens" | "Pharma Tickers" | "Regions" | "Cases" | "Sentinel Sites";
   subtitle: string;
-  to: "/dashboard" | "/map" | "/intake" | "/admin";
-  search?: { case?: string; site?: string; region?: string };
+  to: "/dashboard" | "/predictions" | "/map" | "/intake" | "/admin";
+  search?: { case?: string; site?: string; region?: string; disease?: string };
   keywords: string[];
 };
 
@@ -54,9 +58,10 @@ export function TopBar() {
   const { user, signOut } = useAuth();
   const { isAdmin } = useRoles();
   const { theme, toggle } = useTheme();
-  const { data: cases = [] } = useCases();
-  const { data: rodents = [] } = useRodents();
-  const { data: alerts = [] } = useAlerts();
+  const { disease, setDisease } = useDiseaseFilter();
+  const { data: cases = [] } = useCases(disease);
+  const { data: rodents = [] } = useRodents(disease);
+  const { data: alerts = [] } = useAlerts(disease);
 
   const [paletteOpen, setPaletteOpen] = useState(false);
   const [alertsOpen, setAlertsOpen] = useState(false);
@@ -108,13 +113,23 @@ export function TopBar() {
         },
       },
       {
+        id: "page:/predictions",
+        label: "Outbreak Predictor",
+        auxiliaryData: {
+          group: "Pages",
+          subtitle: "Bio-financial pharma alpha, volume anomalies & lead-lag nowcasts",
+          to: "/predictions",
+          keywords: ["predictions", "predictor", "stocks", "pharma", "nowcast", "alpha"],
+        },
+      },
+      {
         id: "page:/map",
         label: "Geospatial Tracker",
         auxiliaryData: {
           group: "Pages",
-          subtitle: "Cluster map & 5 km reservoir proximity",
+          subtitle: "Multi-pathogen clusters & adaptive sentinel proximity",
           to: "/map",
-          keywords: ["map", "geo", "clusters", "heatmap"],
+          keywords: ["map", "geo", "clusters", "heatmap", "sentinels"],
         },
       },
       {
@@ -122,7 +137,7 @@ export function TopBar() {
         label: "Rapid Case Intake",
         auxiliaryData: {
           group: "Pages",
-          subtitle: "4-step field notification wizard",
+          subtitle: "4-step multi-disease field notification wizard",
           to: "/intake",
           keywords: ["intake", "submit", "case", "report"],
         },
@@ -142,6 +157,29 @@ export function TopBar() {
       });
     }
 
+    const pathogenItems: PaletteItem[] = DISEASES.map((d) => ({
+      id: `pathogen:${d.slug}`,
+      label: d.name,
+      auxiliaryData: {
+        group: "Pathogens",
+        subtitle: `${d.casePrefix} · ICD-11 ${d.icd11} · ${d.category}`,
+        to: "/predictions",
+        search: { disease: d.slug },
+        keywords: ["pathogen", "disease", d.slug, d.name, d.shortName, d.casePrefix, d.icd11],
+      },
+    }));
+
+    const tickerItems: PaletteItem[] = PHARMA_TICKERS.map((t) => ({
+      id: `ticker:${t.ticker}`,
+      label: `${t.ticker} · ${t.companyName}`,
+      auxiliaryData: {
+        group: "Pharma Tickers",
+        subtitle: `${t.sectorRole.replace("_", " ")} · ${t.exchange}`,
+        to: "/predictions",
+        keywords: ["stock", "pharma", "ticker", t.ticker, t.companyName, t.sectorRole],
+      },
+    }));
+
     const regionItems: PaletteItem[] = REGIONS.map((r) => ({
       id: `region:${r.name}`,
       label: r.name,
@@ -154,31 +192,37 @@ export function TopBar() {
       },
     }));
 
-    const caseItems: PaletteItem[] = cases.map((c) => ({
-      id: `case:${c.id}`,
-      label: `${c.id} · ${c.region}`,
-      auxiliaryData: {
-        group: "Cases",
-        subtitle: `${c.syndrome} · ${c.status} · ${c.date}`,
-        to: "/map",
-        search: { case: c.id },
-        keywords: [c.id, c.region, c.syndrome, c.status],
-      },
-    }));
+    const caseItems: PaletteItem[] = cases.map((c) => {
+      const profile = getDiseaseProfile(c.diseaseSlug);
+      return {
+        id: `case:${c.id}`,
+        label: `${c.id} · ${c.region}`,
+        auxiliaryData: {
+          group: "Cases",
+          subtitle: `${profile.shortName} · ${c.syndrome} · ${c.status} · ${c.date}`,
+          to: "/map",
+          search: { case: c.id },
+          keywords: [c.id, profile.name, profile.shortName, c.region, c.syndrome, c.status],
+        },
+      };
+    });
 
-    const siteItems: PaletteItem[] = rodents.map((r) => ({
-      id: `site:${r.id}`,
-      label: `${r.id} · ${r.species}`,
-      auxiliaryData: {
-        group: "Rodent Sites",
-        subtitle: `${r.region} · ${(r.positivity * 100).toFixed(0)}% seropositivity`,
-        to: "/map",
-        search: { site: r.id },
-        keywords: [r.id, r.region, r.species],
-      },
-    }));
+    const siteItems: PaletteItem[] = rodents.map((r) => {
+      const profile = getDiseaseProfile(r.diseaseSlug);
+      return {
+        id: `site:${r.id}`,
+        label: `${r.id} · ${r.species}`,
+        auxiliaryData: {
+          group: "Sentinel Sites",
+          subtitle: `${profile.sentinelSingular} · ${r.region} · ${(r.positivity * 100).toFixed(0)}% positivity`,
+          to: "/map",
+          search: { site: r.id },
+          keywords: [r.id, r.region, r.species, profile.shortName, profile.sentinelSingular],
+        },
+      };
+    });
 
-    return [...pages, ...regionItems, ...caseItems, ...siteItems];
+    return [...pages, ...pathogenItems, ...tickerItems, ...regionItems, ...caseItems, ...siteItems];
   }, [cases, rodents, isAdmin]);
 
   const searchSource = useMemo(
@@ -194,7 +238,26 @@ export function TopBar() {
     if (!selected?.auxiliaryData) return;
     setPaletteOpen(false);
     const { to, search } = selected.auxiliaryData;
+    if (isDiseaseSlug(search?.disease)) {
+      setDisease(search.disease);
+    }
     void navigate({ to, search });
+  };
+
+  const diseaseFilterOptions = useMemo(
+    () => [
+      { value: "all", label: "All pathogens" },
+      ...DISEASES.map((d) => ({ value: d.slug, label: `${d.shortName} (${d.casePrefix})` })),
+    ],
+    [],
+  );
+
+  const handleDiseaseChange = (val: string) => {
+    const next = isDiseaseSlug(val) ? val : "all";
+    setDisease(next);
+    if (pathname === "/predictions" && next !== "all") {
+      void navigate({ to: "/predictions", search: { disease: next }, replace: true });
+    }
   };
 
   const pageTitle = ROUTE_TITLES[pathname] ?? "Workspace";
@@ -218,6 +281,18 @@ export function TopBar() {
         }
         endContent={
           <HStack gap={2} align="center">
+            <HStack align="center" className="hidden md:flex">
+              <Selector
+                label="Global pathogen filter"
+                isLabelHidden
+                variant="secondary"
+                size="sm"
+                width={184}
+                options={diseaseFilterOptions}
+                value={disease}
+                onChange={handleDiseaseChange}
+              />
+            </HStack>
             <HStack gap={1.5} align="center" className="hidden sm:flex">
               <Button
                 label="Search…"
@@ -271,17 +346,31 @@ export function TopBar() {
                             : alert.level === "warning"
                               ? "warning"
                               : "accent";
+                        const profile = getDiseaseProfile(alert.diseaseSlug);
+                        const sourceLabel =
+                          alert.signalSource === "market_divergence"
+                            ? "Market Signal"
+                            : alert.signalSource === "who_don"
+                              ? "WHO DON"
+                              : alert.signalSource === "composite_nowcast"
+                                ? "Nowcast"
+                                : "Field Sentinel";
+                        const alertHref =
+                          alert.signalSource === "market_divergence" ||
+                          alert.signalSource === "composite_nowcast"
+                            ? `/predictions?disease=${profile.slug}`
+                            : `/map?region=${encodeURIComponent(alert.region)}`;
                         return (
                           <ListItem
                             key={alert.id}
                             align="start"
                             startContent={<StatusDot variant={dotVariant} label={alert.level} />}
                             label={alert.title}
-                            description={alert.region}
+                            description={`${profile.shortName} · ${alert.region} · ${sourceLabel}`}
                             endContent={
                               <Timestamp value={alert.createdAt} format="relative_short" />
                             }
-                            href={`/map?region=${encodeURIComponent(alert.region)}`}
+                            href={alertHref}
                             onClick={() => setAlertsOpen(false)}
                           />
                         );
@@ -363,7 +452,7 @@ export function TopBar() {
         onOpenChange={setPaletteOpen}
         searchSource={searchSource}
         onValueChange={handlePaletteSelect}
-        label="Search regions, cases, rodent sites, and pages"
+        label="Search pathogens, pharma tickers, regions, cases, sentinel sites, and pages"
         emptySearchText="No matching surveillance records."
         renderItem={(item) => (
           <HStack justify="between" align="center" gap={3} width="100%">

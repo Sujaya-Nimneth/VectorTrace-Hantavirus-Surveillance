@@ -84,16 +84,21 @@ export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()(
     meta: [
       { charSet: "utf-8" },
       { name: "viewport", content: "width=device-width, initial-scale=1" },
-      { title: "VectorTrace · Hantavirus Surveillance" },
+      { title: "VectorTrace · Multi-Disease Surveillance & Outbreak Predictor" },
       {
         name: "description",
-        content: "Real-time hantavirus epidemiological tracking and geospatial surveillance.",
+        content:
+          "Real-time multi-pathogen epidemiological tracking, sentinel surveillance, and bio-financial outbreak nowcasting.",
       },
       { name: "author", content: "VectorTrace" },
-      { property: "og:title", content: "VectorTrace · Hantavirus Surveillance" },
+      {
+        property: "og:title",
+        content: "VectorTrace · Multi-Disease Surveillance & Outbreak Predictor",
+      },
       {
         property: "og:description",
-        content: "Real-time hantavirus epidemiological tracking and geospatial surveillance.",
+        content:
+          "Real-time multi-pathogen epidemiological tracking, sentinel surveillance, and bio-financial outbreak nowcasting.",
       },
       { property: "og:type", content: "website" },
       { name: "twitter:card", content: "summary" },
