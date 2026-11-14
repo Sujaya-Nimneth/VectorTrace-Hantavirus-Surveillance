@@ -1,4 +1,4 @@
-# VectorTrace — Hantavirus Surveillance Command Center
+# VectorTrace — Multi-Disease Surveillance & Bio-Financial Outbreak Predictor
 
 [![CI](https://github.com/Sujaya-Nimneth/VectorTrace-Hantavirus-Surveillance/actions/workflows/deploy.yml/badge.svg)](https://github.com/Sujaya-Nimneth/VectorTrace-Hantavirus-Surveillance/actions/workflows/deploy.yml)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
@@ -7,7 +7,18 @@
 
 [![Live Demo](https://img.shields.io/badge/live-demo-ff5722?logo=cloudflareworkers&logoColor=white)](https://vectortrace-hantavirus-surveillance.sujayanimneth.workers.dev)
 
-**VectorTrace** is a real-time epidemiological surveillance platform for hantavirus. It pairs a public overview with an operational surveillance workspace — analytics dashboard, geospatial risk map, 4-step rapid case intake, and an automated WHO Disease Outbreak News ingestion pipeline backed by Supabase (Postgres + RLS + Edge Functions) and Cloudflare Workers.
+**VectorTrace** is a real-time multi-pathogen epidemiological surveillance and bio-financial outbreak nowcasting platform. Expanding beyond its Southern Cone Hantavirus roots, VectorTrace tracks six high-consequence pathogens (**Hantavirus**, **Dengue**, **Avian Influenza H5N1**, **Mpox**, **Chikungunya / Zika**, and **Cholera**) and forecasts regional surges using market-neutral abnormal returns and trading-volume anomalies across disease-mapped pharmaceutical, diagnostic, vector-control, and hospital-consumable equities paired with syndromic Wikimedia velocity and climate suitability.
+
+### Monitored Pathogens & Bio-Financial Baskets
+
+| Pathogen                 | Code   | Sentinel Modality       | Radius  | Lead-Indicator Equities                               |
+| ------------------------ | ------ | ----------------------- | ------- | ----------------------------------------------------- |
+| **Hantavirus**           | `HTV`  | Rodent traps            | `5 km`  | `RGNX`, `BCRX`, `GILD`, `HOLX`                        |
+| **Dengue Fever**         | `DNG`  | Mosquito ovitraps       | `3 km`  | `TAK`, `SNY`, `MRK`, `ABT`, `TMO`, `FMC`, `BAYRY`     |
+| **Avian Influenza H5N1** | `H5N1` | Avian/dairy sentinels   | `15 km` | `CSLLY`, `GSK`, `SNY`, `MRNA`, `NVAX`, `RHHBY`, `ZTS` |
+| **Mpox**                 | `MPX`  | Wastewater surveillance | `10 km` | `BVNRY`, `SIGA`, `EBS`, `HOLX`                        |
+| **Chikungunya / Zika**   | `CHK`  | Mosquito ovitraps       | `3 km`  | `VALN`, `TAK`, `ABT`, `FMC`                           |
+| **Cholera / Waterborne** | `CHL`  | Wastewater surveillance | `2 km`  | `EBS`, `DXCM`, `ABT`, `BDX`                           |
 
 ### Screenshots
 
@@ -25,57 +36,61 @@
 
 ## Highlights
 
-- **Public corridor snapshot** — `/` greets unauthenticated visitors with live regional corridor metrics (`Corridors` / `Recent cases` toggle) and direct entry points into surveillance workflows.
-- **Surveillance dashboard** — `/dashboard` presents a 30-day KPI strip with prior-period deltas, multi-region linear epidemic curve (`7D` / `30D` / `90D`), severity-filtered alerts feed, and sortable/filterable regional incidence table (`per 100k`) with CSV export.
-- **Geospatial proximity tracker** — `/map` renders a keyless Esri dark/light basemap with confirmed/suspected/pending case markers, _Sigmodontinae_ rodent reservoir sites, density heat overlay, docked region/layer controls, and an interactive slide-over drawer calculating `≤ 5 km` Haversine overlaps.
-- **Global command palette & alerts** — `⌘K` / `Ctrl+K` quick jump across pages, corridors, cases, and trap sites from the top bar alongside a live alerts popover and persisted light/dark mode.
-- **Rapid case intake** — `/intake` provides a 4-step clinician workflow (demographics → clinical onset → exposure context → review) with zod validation against controlled vocabularies, browser draft persistence, and optimistic query updates.
+- **Public corridor & forecast snapshot** — `/` greets visitors with live corridor incidence metrics, multi-pathogen **Risk forecast** nowcasts (`Corridors` / `Risk forecast` / `Recent cases`), and module status contracts.
+- **Bio-Financial Outbreak Predictor** — `/predictions` computes market-neutral cumulative abnormal returns (`CAR_i,t = r_i,t - [0.65·r_XBI,t + 0.35·r_SPY,t]`), institutional volume Z-scores, Wikimedia syndromic velocity, and Open-Meteo vector suitability — producing composite risk scores (`0–100`) and `+7d` to `+21d` lead-lag cross-correlations per disease basket.
+- **Multi-pathogen dashboard** — `/dashboard` switches seamlessly across any single disease or aggregated all-pathogen mode via the top-bar pathogen selector, plotting multi-pathogen epidemic curves (`7D` / `30D` / `90D`), market-divergence early-warning banners, severity/source-tagged alerts, and sortable incidence tables (`/ 100k`) with CSV export.
+- **Adaptive geospatial tracker** — `/map` plots human cases alongside 4 distinct sentinel site shapes (rodent traps, mosquito ovitraps, avian sentinels, wastewater nodes) and evaluates pathogen-specific Haversine proximity radii (`2 km`–`15 km`).
+- **Global command palette & alerts** — `⌘K` / `Ctrl+K` quick jump across pages, pathogens, pharma tickers, corridors, cases, and sentinel sites alongside a live alerts popover and persisted light/dark mode.
+- **Dynamic 4-step case intake** — `/intake` lets clinicians select the target pathogen, dynamically adapting syndromes (e.g., `HPS`/`HFRS`, `DF`/`DHF`/`DSS`, `CLADE_1B`/`CLADE_2B`) and symptom checklists with zod validation and draft recovery.
 - **Role-based access** — Supabase Auth with `admin` / `epidemiologist` / `viewer` roles enforced by Postgres RLS (UI route guards are convenience; Postgres RLS is the enforcement layer).
-- **Automated ingestion** — Supabase Edge Functions scrape WHO Disease Outbreak News via Firecrawl on a `pg_cron` schedule, normalize and deduplicate records, geocode country-level reports with Open-Meteo, update case statuses across runs, and raise confirmation alerts.
-- **Admin observability console** — `/admin` tracks ingest health telemetry, external feed response latencies, database query latency against a `220ms` SLO threshold, and severity-filterable system feed logs (code-split out of the main bundle).
-- **Demo mode** — Without backend credentials (or with `VITE_DEMO_MODE=true`), the app serves a deterministic bundled dataset across every view.
+- **Automated multi-source ingestion** — Edge Functions scrape WHO Disease Outbreak News (`ingest-don-feed`) with a multi-pathogen classifier, fetch Yahoo Finance equity bars + Wikimedia pageviews + Open-Meteo climate signals (`ingest-market-signals`) on a `pg_cron` schedule, and raise divergence/confirmation alerts.
+- **Admin observability console** — `/admin` monitors ingest telemetry, Yahoo Finance / Wikimedia / WHO probe uptimes, database latency against a `220ms` SLO threshold, and live feed logs.
+- **Demo mode** — Without backend credentials (or with `VITE_DEMO_MODE=true`), the app generates deterministic multi-pathogen cases, sentinels, and 90-day equity bar fixtures across every view.
 
 ## Architecture
 
 ```
-                ┌──────────────────────────────────────────────┐
-                │                Cloudflare Workers            │
-                │  TanStack Start (React 19, SSR) + Vite       │
-                │  ├── /            Public overview & snapshot │
-                │  ├── /dashboard   Surveillance KPIs & trends │
-                │  ├── /map         Geospatial tracker (lazy)  │
-                │  ├── /intake      Case intake (clinicians)   │
-                │  ├── /login       Operator authentication    │
-                │  └── /admin       Infra console (admin, lazy)│
-                └───────────────┬──────────────────────────────┘
-                                │ Supabase JS (public view / authed RLS)
-                ┌───────────────▼──────────────────────────────┐
-                │                  Supabase                    │
-                │  Postgres + RLS ── hanta_cases (+ public      │
-                │  projection), rodent_sites, hanta_alerts,    │
-                │  user_roles, infra_* telemetry               │
-                │  Realtime ── live INSERT push to the UI      │
-                │                                              │
-                │  Edge Functions (Deno)                       │
-                │  ├── ingest-don-feed ── WHO DON via Firecrawl│
-                │  ├── infra-health-check ── uptime + DB probe │
-                │  └── geocode-case-locations ── map repair    │
-                │        ▲ scheduled by pg_cron; Vault-backed   │
-                │          bearer auth, fail-closed             │
-                └──────────────────────────────────────────────┘
+                ┌───────────────────────────────────────────────────────────┐
+                │                    Cloudflare Workers                     │
+                │  TanStack Start (React 19, SSR) + Astryx Design System    │
+                │  ├── /            Public overview & risk snapshot         │
+                │  ├── /dashboard   Multi-pathogen KPIs, curves & alerts    │
+                │  ├── /predictions Bio-financial nowcasts & equity basket  │
+                │  ├── /map         Geospatial clusters & adaptive radii    │
+                │  ├── /intake      Dynamic 4-step clinical intake          │
+                │  ├── /login       Operator authentication                 │
+                │  └── /admin       Infra console (admin, lazy)             │
+                └───────────────────────────┬───────────────────────────────┘
+                                            │ Supabase JS (public view / authed RLS)
+                ┌───────────────────────────▼───────────────────────────────┐
+                │                          Supabase                         │
+                │  Postgres + RLS ── diseases, hanta_cases (+ public view), │
+                │  rodent_sites, hanta_alerts, pharma_tickers,              │
+                │  disease_ticker_mappings, market_daily_bars,              │
+                │  disease_nowcast_signals, user_roles, infra_*             │
+                │  Realtime ── live INSERT push to UI                       │
+                │                                                           │
+                │  Edge Functions (Deno)                                    │
+                │  ├── ingest-don-feed      ── Multi-pathogen WHO DON       │
+                │  ├── ingest-market-signals── Yahoo Finance+Wiki+OpenMeteo │
+                │  ├── infra-health-check   ── API uptime + DB latency      │
+                │  └── geocode-case-locations ─ legacy coordinate repair    │
+                │        ▲ scheduled by pg_cron; Vault-backed bearer auth   │
+                └───────────────────────────────────────────────────────────┘
 ```
 
-**Data minimization:** anonymous visitors read only the `hanta_cases_public` view — clinical columns (age, sex, symptoms, exposure narrative) are restricted to authenticated readers by RLS.
+**Data minimization:** anonymous visitors read only the `hanta_cases_public` view — clinical columns (age, sex, symptoms, exposure narrative) are restricted to authenticated readers by RLS. Market bar and disease nowcast tables are publicly readable non-PII quantitative signals, with writes restricted to `service_role`.
 
 ## Tech stack
 
-| Layer         | Choices                                                                             |
-| ------------- | ----------------------------------------------------------------------------------- |
-| UI            | React 19, TypeScript, TanStack Start + Router, Tailwind CSS 4, lucide-react, sonner |
-| Data          | TanStack Query v5, Supabase JS v2, Realtime channels, zod                           |
-| Visualization | Recharts (epidemic curve, latency SLO), Leaflet + leaflet.heat (map)                |
-| Backend       | Supabase Postgres with RLS, Edge Functions (Deno), pg_cron                          |
-| Infra         | Cloudflare Workers (wrangler), Docker + Nginx (self-host parity), GitHub Actions    |
+| Layer         | Choices                                                                                           |
+| ------------- | ------------------------------------------------------------------------------------------------- |
+| UI            | React 19, TypeScript, TanStack Start + Router, `@astryxdesign/core`, Tailwind CSS 4, lucide-react |
+| Data          | TanStack Query v5, Supabase JS v2, Realtime channels, zod                                         |
+| Visualization | Recharts (epidemic curves, nowcast trajectory, lead-lag correlogram, SLO), Leaflet + heat         |
+| Backend       | Supabase Postgres with RLS, Edge Functions (Deno), pg_cron                                        |
+| Signals       | Yahoo Finance daily OHLCV, Wikimedia Pageviews API, Open-Meteo weather, WHO DON (Firecrawl)       |
+| Infra         | Cloudflare Workers (wrangler), Docker + Nginx (self-host parity), GitHub Actions                  |
 
 ## Quick start
 
@@ -124,6 +139,7 @@ The checked-in config targets project `wsgbrwmgiyecsbpvpfpd`. For a new or forke
 
    ```bash
    supabase functions deploy ingest-don-feed
+   supabase functions deploy ingest-market-signals
    supabase functions deploy infra-health-check
    supabase functions deploy geocode-case-locations
    supabase secrets set FIRECRAWL_API_KEY=<KEY>
