@@ -83,10 +83,32 @@ export interface FileRoutesById {
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
-  fullPaths: '/' | '/admin' | '/dashboard' | '/intake' | '/login' | '/map' | '/predictions'
+  fullPaths:
+    | '/'
+    | '/admin'
+    | '/dashboard'
+    | '/intake'
+    | '/login'
+    | '/map'
+    | '/predictions'
   fileRoutesByTo: FileRoutesByTo
-  to: '/' | '/admin' | '/dashboard' | '/intake' | '/login' | '/map' | '/predictions'
-  id: '__root__' | '/' | '/admin' | '/dashboard' | '/intake' | '/login' | '/map' | '/predictions'
+  to:
+    | '/'
+    | '/admin'
+    | '/dashboard'
+    | '/intake'
+    | '/login'
+    | '/map'
+    | '/predictions'
+  id:
+    | '__root__'
+    | '/'
+    | '/admin'
+    | '/dashboard'
+    | '/intake'
+    | '/login'
+    | '/map'
+    | '/predictions'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
