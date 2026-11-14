@@ -7,6 +7,14 @@ const SERVICES = [
     name: "WHO Disease Outbreak News",
     url: "https://www.who.int/emergencies/disease-outbreak-news",
   },
+  {
+    name: "Yahoo Finance OHLCV",
+    url: "https://query1.finance.yahoo.com/v8/finance/chart/SPY?range=5d&interval=1d",
+  },
+  {
+    name: "Wikimedia Pageviews",
+    url: "https://wikimedia.org/api/rest_v1/metrics/pageviews/per-article/en.wikipedia/all-access/user/Dengue_fever/daily/20261101/20261102",
+  },
   { name: "Supabase REST", url: "{{SUPABASE_URL}}/rest/v1/" },
 ];
 
